@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/Header";
-import { BH_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-loader";
+import { ALMENARA_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-loader";
 import {
   formatAge,
   ticketUrgency,
@@ -71,8 +71,8 @@ function InternalPage() {
         if (cancelled || !mapRef.current) return;
         mapsApi.current = maps;
         mapObj.current = new maps.Map(mapRef.current, {
-          center: BH_CENTER,
-          zoom: 12,
+          center: ALMENARA_CENTER,
+          zoom: 14,
           styles: MAP_STYLES,
           clickableIcons: false,
           mapTypeControl: false,
