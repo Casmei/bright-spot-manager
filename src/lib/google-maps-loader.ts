@@ -43,4 +43,5 @@ export const MAP_STYLES = [
   { featureType: "transit", stylers: [{ visibility: "off" }] },
 ];
 
-export const BH_CENTER = { lat: -19.9245, lng: -43.9352 };
+/* Almenara, Minas Gerais */
+export const ALMENARA_CENTER = { lat: -16.1836, lng: -40.6947 };

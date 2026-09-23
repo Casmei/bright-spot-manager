@@ -3,6 +3,10 @@ import { z } from "zod";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
+/* Almenara, Minas Gerais — search results are biased to this region. */
+const SEARCH_CENTER = { latitude: -16.1836, longitude: -40.6947 };
+const SEARCH_RADIUS_METERS = 60000;
+
 function credentials() {
   const lovableKey = process.env["LOVABLE_API_KEY"];
   const mapsKey = process.env["GOOGLE_MAPS_API_KEY"];
@@ -62,3 +66,106 @@ export const reverseGeocode = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data }) => callGeocode({ latlng: `${data.lat},${data.lng}` }));
+
+export type AddressSuggestion = { placeId: string; label: string };
+
+/* Address autocomplete while the person types. */
+export const suggestAddresses = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        input: z.string().trim().min(3).max(200),
+        sessionToken: z.string().trim().min(8).max(80),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }): Promise<AddressSuggestion[]> => {
+    const { lovableKey, mapsKey } = credentials();
+
+    const response = await fetch(`${GATEWAY_URL}/places/v1/places:autocomplete`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableKey}`,
+        "X-Connection-Api-Key": mapsKey,
+        "Content-Type": "application/json",
+        "X-Goog-FieldMask":
+          "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text",
+      },
+      body: JSON.stringify({
+        input: data.input,
+        sessionToken: data.sessionToken,
+        languageCode: "pt-BR",
+        regionCode: "BR",
+        locationBias: {
+          circle: { center: SEARCH_CENTER, radius: SEARCH_RADIUS_METERS },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error(`Autocomplete falhou [${response.status}]: ${body}`);
+      return [];
+    }
+
+    const payload = (await response.json()) as {
+      suggestions?: Array<{
+        placePrediction?: { placeId?: string; text?: { text?: string } };
+      }>;
+    };
+
+    return (payload.suggestions ?? [])
+      .map((item) => ({
+        placeId: item.placePrediction?.placeId ?? "",
+        label: item.placePrediction?.text?.text ?? "",
+      }))
+      .filter((item) => item.placeId && item.label)
+      .slice(0, 6);
+  });
+
+/* Resolve a chosen suggestion into a formatted address plus coordinates. */
+export const placeDetails = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        placeId: z.string().trim().min(3).max(300),
+        sessionToken: z.string().trim().min(8).max(80),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }): Promise<GeocodeResult | null> => {
+    const { lovableKey, mapsKey } = credentials();
+    const query = new URLSearchParams({
+      sessionToken: data.sessionToken,
+      languageCode: "pt-BR",
+      regionCode: "BR",
+    });
+
+    const response = await fetch(
+      `${GATEWAY_URL}/places/v1/places/${encodeURIComponent(data.placeId)}?${query.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${lovableKey}`,
+          "X-Connection-Api-Key": mapsKey,
+          "X-Goog-FieldMask": "formattedAddress,location",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error(`Detalhes do local falharam [${response.status}]: ${body}`);
+      throw new Error("Não foi possível confirmar o endereço escolhido");
+    }
+
+    const payload = (await response.json()) as {
+      formattedAddress?: string;
+      location?: { latitude?: number; longitude?: number };
+    };
+
+    const lat = payload.location?.latitude;
+    const lng = payload.location?.longitude;
+    if (typeof lat !== "number" || typeof lng !== "number") return null;
+
+    return { address: payload.formattedAddress ?? "", lat, lng };
+  });
