@@ -9,6 +9,7 @@ export type Ticket = {
   lat: number;
   lng: number;
   createdAt: string;
+  photo?: string;
 };
 
 export type Urgency = "novo" | "atencao" | "critico";
