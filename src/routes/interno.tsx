@@ -233,6 +233,13 @@ function InternalPage() {
                         {formatAge(ticket)}
                       </span>
                     </div>
+                    {ticket.photo ? (
+                      <img
+                        src={ticket.photo}
+                        alt={`Foto do poste do chamado ${ticket.protocol}`}
+                        className="mt-3 h-28 w-full rounded-lg border border-border object-cover"
+                      />
+                    ) : null}
                     <p className="mt-2 text-sm text-foreground">{ticket.address}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {ticket.name} · {ticket.whatsapp}

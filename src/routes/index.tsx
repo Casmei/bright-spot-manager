@@ -295,7 +295,7 @@ function PublicPage() {
       address: parsed.data.address,
       lat: point.lat,
       lng: point.lng,
-      photo: photo ?? undefined,
+      ...(photo ? { photo } : {}),
     });
     setProtocol(ticket.protocol);
   }
