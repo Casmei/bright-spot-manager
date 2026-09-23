@@ -14,8 +14,7 @@ export function loadGoogleMaps(): Promise<AnyMaps> {
     }
 
     const env = import.meta.env as Record<string, string | undefined>;
-    const key = env["VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY"];
-    const channel = env["VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID"] ?? "";
+    const key = env["VITE_GOOGLE_MAPS_API_KEY"];
 
     if (!key) {
       reject(new Error("Chave do mapa não configurada"));
@@ -28,8 +27,7 @@ export function loadGoogleMaps(): Promise<AnyMaps> {
     const script = document.createElement("script");
     script.src =
       `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}` +
-      `&loading=async&callback=__initLampMap&language=pt-BR&region=BR` +
-      (channel ? `&channel=${encodeURIComponent(channel)}` : "");
+      `&loading=async&callback=__initLampMap&language=pt-BR&region=BR`;
     script.async = true;
     script.onerror = () => reject(new Error("Falha ao carregar o mapa"));
     document.head.appendChild(script);

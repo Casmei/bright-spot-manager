@@ -134,9 +134,13 @@ function PublicPage() {
         const apply = (coords: { lat: number; lng: number }) => {
           setPoint(coords);
           setShowSuggestions(false);
-          void findPoint({ data: coords }).then((result) => {
-            if (result) setAddress(result.address);
-          });
+          void findPoint({ data: coords })
+            .then((result) => {
+              if (result) setAddress(result.address);
+            })
+            .catch(() => {
+              setError("Não conseguimos identificar o endereço deste ponto. Digite-o manualmente.");
+            });
         };
 
         marker.addListener("dragend", () => {
@@ -173,9 +177,15 @@ function PublicPage() {
         placeMarker(coords, 18);
         setLocating(false);
         setMessage("Pegamos sua localização e o endereço automaticamente. Ajuste se precisar.");
-        void findPoint({ data: coords }).then((result) => {
-          if (result) setAddress(result.address);
-        });
+        void findPoint({ data: coords })
+          .then((result) => {
+            if (result) setAddress(result.address);
+          })
+          .catch(() => {
+            setMessage(
+              "Pegamos sua localização, mas não conseguimos identificar o endereço automaticamente. Digite-o abaixo.",
+            );
+          });
       },
       () => {
         setLocating(false);
@@ -427,7 +437,6 @@ function PublicPage() {
                   ref={photoInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   onChange={(event) => void handlePhoto(event)}
                   className="hidden"
                 />

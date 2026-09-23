@@ -1,33 +1,27 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
-
 /* Almenara, Minas Gerais — search results are biased to this region. */
 const SEARCH_CENTER = { latitude: -16.1836, longitude: -40.6947 };
 const SEARCH_RADIUS_METERS = 60000;
 
 function credentials() {
-  const lovableKey = process.env["LOVABLE_API_KEY"];
   const mapsKey = process.env["GOOGLE_MAPS_API_KEY"];
-  if (!lovableKey || !mapsKey) {
+  if (!mapsKey) {
     throw new Error("Serviço de endereços não configurado");
   }
-  return { lovableKey, mapsKey };
+  return { mapsKey };
 }
 
 type GeocodeResult = { address: string; lat: number; lng: number };
 
 async function callGeocode(params: Record<string, string>): Promise<GeocodeResult | null> {
-  const { lovableKey, mapsKey } = credentials();
-  const query = new URLSearchParams({ language: "pt-BR", region: "br", ...params });
+  const { mapsKey } = credentials();
+  const query = new URLSearchParams({ language: "pt-BR", region: "br", key: mapsKey, ...params });
 
-  const response = await fetch(`${GATEWAY_URL}/maps/api/geocode/json?${query.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": mapsKey,
-    },
-  });
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/geocode/json?${query.toString()}`,
+  );
 
   if (!response.ok) {
     const body = await response.text();
@@ -61,9 +55,7 @@ export const geocodeAddress = createServerFn({ method: "POST" })
 
 export const reverseGeocode = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) =>
-    z
-      .object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })
-      .parse(data),
+    z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).parse(data),
   )
   .handler(async ({ data }) => callGeocode({ latlng: `${data.lat},${data.lng}` }));
 
@@ -80,14 +72,13 @@ export const suggestAddresses = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data }): Promise<AddressSuggestion[]> => {
-    const { lovableKey, mapsKey } = credentials();
+    const { mapsKey } = credentials();
 
-    const response = await fetch(`${GATEWAY_URL}/places/v1/places:autocomplete`, {
+    const response = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${lovableKey}`,
-        "X-Connection-Api-Key": mapsKey,
         "Content-Type": "application/json",
+        "X-Goog-Api-Key": mapsKey,
         "X-Goog-FieldMask":
           "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text",
       },
@@ -134,7 +125,7 @@ export const placeDetails = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data }): Promise<GeocodeResult | null> => {
-    const { lovableKey, mapsKey } = credentials();
+    const { mapsKey } = credentials();
     const query = new URLSearchParams({
       sessionToken: data.sessionToken,
       languageCode: "pt-BR",
@@ -142,11 +133,10 @@ export const placeDetails = createServerFn({ method: "POST" })
     });
 
     const response = await fetch(
-      `${GATEWAY_URL}/places/v1/places/${encodeURIComponent(data.placeId)}?${query.toString()}`,
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(data.placeId)}?${query.toString()}`,
       {
         headers: {
-          Authorization: `Bearer ${lovableKey}`,
-          "X-Connection-Api-Key": mapsKey,
+          "X-Goog-Api-Key": mapsKey,
           "X-Goog-FieldMask": "formattedAddress,location",
         },
       },
