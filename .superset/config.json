@@ -1,0 +1,9 @@
+{
+  "setup": [
+    "bun install",
+    "cp \"$SUPERSET_ROOT_PATH/.env\" .env"
+  ],
+  "run": [
+    "bun run dev"
+  ]
+}
