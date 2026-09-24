@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { Header } from "@/components/Header";
 import { ALMENARA_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-loader";
+import { REPORT_TYPES, reportTypes, type ReportType } from "@/lib/report-types";
 import { addTicket } from "@/lib/tickets";
 import {
   geocodeAddress,
@@ -16,16 +17,16 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Solicitar troca de lâmpada — Cemig Iluminação Pública" },
+      { title: "Fazer denúncia — Almenara Vigia" },
       {
         name: "description",
         content:
-          "Informe o local de um poste com lâmpada queimada ou apagada em Almenara e acompanhe a solicitação junto à Cemig.",
+          "Denuncie buracos, entulho, lâmpadas queimadas e outros problemas de Almenara. A denúncia fica pública no mapa, com a contagem de dias sem solução.",
       },
-      { property: "og:title", content: "Solicitar troca de lâmpada — Cemig" },
+      { property: "og:title", content: "Almenara Vigia — Denuncie e cobre a prefeitura" },
       {
         property: "og:description",
-        content: "Marque no mapa o poste com lâmpada apagada e registre sua solicitação.",
+        content: "Tire uma foto do problema, marque no mapa e pressione a prefeitura por uma solução.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -34,18 +35,41 @@ export const Route = createFileRoute("/")({
   component: PublicPage,
 });
 
-const formSchema = z.object({
-  name: z.string().trim().min(3, "Informe seu nome completo").max(100),
-  whatsapp: z
-    .string()
-    .trim()
-    .min(10, "Informe um WhatsApp com DDD")
-    .max(20)
-    .regex(/^[0-9()+\-\s]+$/, "Use apenas números, espaços e parênteses"),
-  address: z.string().trim().min(5, "Informe ou confirme o endereço").max(250),
-});
+const formSchema = z
+  .object({
+    type: z.enum(REPORT_TYPES, {
+      errorMap: () => ({ message: "Selecione o tipo do problema" }),
+    }),
+    description: z.string().trim().max(280, "Use no máximo 280 caracteres na descrição"),
+    address: z.string().trim().min(5, "Informe ou confirme o endereço do problema").max(250),
+    name: z.string().trim().min(3, "Informe seu nome completo").max(100),
+    whatsapp: z
+      .string()
+      .trim()
+      .min(10, "Informe um WhatsApp com DDD")
+      .max(20)
+      .regex(/^[0-9()+\-\s]+$/, "Use apenas números, espaços e parênteses"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "outro" && data.description.length < 10) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["description"],
+        message: "Descreva o problema com pelo menos 10 caracteres",
+      });
+    }
+  });
 
-/* Shrinks a camera photo so it can be kept alongside the request. */
+type LocationStatus = "idle" | "locating" | "found" | "manual";
+
+const locationHints: Record<LocationStatus, string> = {
+  idle: "Comece pela foto do problema — a gente tenta achar o local sozinho.",
+  locating: "Buscando sua localização...",
+  found: "Local encontrado. Confira e complete a denúncia.",
+  manual: "Digite o endereço ou toque no mapa para marcar o local.",
+};
+
+/* Shrinks a camera photo so it can be kept alongside the report. */
 async function shrinkPhoto(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const max = 1000;
@@ -58,6 +82,25 @@ async function shrinkPhoto(file: File): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.75);
 }
 
+/* Asks the browser for the device location; resolves null when denied or unavailable. */
+function browserLocation(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  });
+}
+
+const inputClass =
+  "mt-2 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25";
+const labelClass = "text-xs font-semibold tracking-wide text-muted-foreground uppercase";
+
 function PublicPage() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapObj = useRef<any>(null);
@@ -68,15 +111,16 @@ function PublicPage() {
 
   const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
   const [address, setAddress] = useState("");
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle");
+  const [type, setType] = useState<ReportType | "">("");
+  const [description, setDescription] = useState("");
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoNote, setPhotoNote] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [locating, setLocating] = useState(true);
   const [searching, setSearching] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [protocol, setProtocol] = useState<string | null>(null);
 
@@ -99,6 +143,26 @@ function PublicPage() {
     markerObj.current?.setVisible(true);
     markerObj.current?.setPosition(coords);
   }, []);
+
+  /* Fills the address for a point; falls back to typing when it cannot be resolved. */
+  const resolveAddress = useCallback(
+    async (coords: { lat: number; lng: number }) => {
+      try {
+        const result = await findPoint({ data: coords });
+        if (result) {
+          setAddress(result.address);
+          setLocationStatus("found");
+          return;
+        }
+      } catch {
+        // handled below
+      }
+      setAddress("");
+      setLocationStatus("manual");
+      setError("Não conseguimos identificar o endereço deste ponto. Digite-o abaixo.");
+    },
+    [findPoint],
+  );
 
   // Load the map
   useEffect(() => {
@@ -134,13 +198,8 @@ function PublicPage() {
         const apply = (coords: { lat: number; lng: number }) => {
           setPoint(coords);
           setShowSuggestions(false);
-          void findPoint({ data: coords })
-            .then((result) => {
-              if (result) setAddress(result.address);
-            })
-            .catch(() => {
-              setError("Não conseguimos identificar o endereço deste ponto. Digite-o manualmente.");
-            });
+          setError(null);
+          void resolveAddress(coords);
         };
 
         marker.addListener("dragend", () => {
@@ -160,40 +219,7 @@ function PublicPage() {
     return () => {
       cancelled = true;
     };
-  }, [findPoint]);
-
-  // Ask for the browser location as soon as the page opens
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setLocating(false);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const coords = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        placeMarker(coords, 18);
-        setLocating(false);
-        setMessage("Pegamos sua localização e o endereço automaticamente. Ajuste se precisar.");
-        void findPoint({ data: coords })
-          .then((result) => {
-            if (result) setAddress(result.address);
-          })
-          .catch(() => {
-            setMessage(
-              "Pegamos sua localização, mas não conseguimos identificar o endereço automaticamente. Digite-o abaixo.",
-            );
-          });
-      },
-      () => {
-        setLocating(false);
-        setMessage("Sem acesso à sua localização — digite o endereço do poste abaixo.");
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
-  }, [findPoint, placeMarker]);
+  }, [resolveAddress]);
 
   // Address suggestions while typing
   useEffect(() => {
@@ -231,7 +257,7 @@ function PublicPage() {
       }
       if (result.address) setAddress(result.address);
       placeMarker({ lat: result.lat, lng: result.lng });
-      setMessage("Endereço localizado. Ajuste o ponto no mapa se precisar.");
+      setLocationStatus("found");
     } catch {
       setError("Não conseguimos confirmar esse endereço agora.");
     }
@@ -248,12 +274,12 @@ function PublicPage() {
     try {
       const result = await findAddress({ data: { address: address.trim() } });
       if (!result) {
-        setError("Endereço não encontrado. Tente incluir número, bairro e cidade.");
+        setError("Endereço não encontrado. Tente incluir número e bairro.");
         return;
       }
       setAddress(result.address);
       placeMarker({ lat: result.lat, lng: result.lng });
-      setMessage("Endereço localizado. Ajuste o ponto no mapa se precisar.");
+      setLocationStatus("found");
     } catch {
       setError("Não conseguimos consultar o endereço agora. Tente novamente.");
     } finally {
@@ -267,40 +293,64 @@ function PublicPage() {
     if (!file) return;
     setError(null);
     setPhotoNote("Lendo a foto...");
+
+    let gps: { latitude?: number; longitude?: number } | null = null;
     try {
       const exifr = await import("exifr");
-      const gps = await exifr.gps(file).catch(() => null);
+      gps = await exifr.gps(file).catch(() => null);
       setPhoto(await shrinkPhoto(file));
-
-      if (gps && typeof gps.latitude === "number" && typeof gps.longitude === "number") {
-        const coords = { lat: gps.latitude, lng: gps.longitude };
-        placeMarker(coords, 18);
-        setPhotoNote("Foto anexada — usamos a localização registrada na própria foto.");
-        const result = await findPoint({ data: coords });
-        if (result) setAddress(result.address);
-      } else {
-        setPhotoNote("Foto anexada. Ela não tem localização, então confirme o ponto no mapa.");
-      }
     } catch {
       setPhotoNote(null);
       setError("Não conseguimos ler essa foto. Tente outra imagem.");
+      return;
     }
+
+    // 1. Location saved in the photo itself
+    if (gps && typeof gps.latitude === "number" && typeof gps.longitude === "number") {
+      const coords = { lat: gps.latitude, lng: gps.longitude };
+      setPhotoNote("Foto anexada — usamos a localização registrada na própria foto.");
+      placeMarker(coords, 18);
+      await resolveAddress(coords);
+      return;
+    }
+
+    // A location is already set: swapping the photo must not move it
+    if (point) {
+      setPhotoNote("Foto anexada.");
+      return;
+    }
+
+    // 2. Device location (phones often strip GPS from uploaded photos)
+    setPhotoNote("A foto não tem localização. Pedindo a localização do seu aparelho...");
+    setLocationStatus("locating");
+    const coords = await browserLocation();
+    if (coords) {
+      setPhotoNote("Foto anexada — usamos a localização do seu aparelho.");
+      placeMarker(coords, 18);
+      await resolveAddress(coords);
+      return;
+    }
+
+    // 3. Typed address
+    setPhotoNote("Foto anexada, mas não conseguimos a localização. Informe o endereço abaixo.");
+    setLocationStatus("manual");
   }
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     if (!point) {
-      setError("Marque o local do poste no mapa ou busque o endereço.");
+      setError("Marque o local do problema no mapa ou informe o endereço.");
       return;
     }
-    const parsed = formSchema.safeParse({ name, whatsapp, address });
+    const parsed = formSchema.safeParse({ type, description, address, name, whatsapp });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Verifique os dados informados.");
       return;
     }
     const ticket = addTicket({
-      type: "lampada",
+      type: parsed.data.type,
+      ...(parsed.data.type === "outro" ? { description: parsed.data.description } : {}),
       name: parsed.data.name,
       whatsapp: parsed.data.whatsapp,
       address: parsed.data.address,
@@ -313,11 +363,19 @@ function PublicPage() {
 
   function resetForm() {
     setProtocol(null);
+    setPoint(null);
+    setAddress("");
+    setLocationStatus("idle");
+    setType("");
+    setDescription("");
     setName("");
     setWhatsapp("");
-    setMessage(null);
     setPhoto(null);
     setPhotoNote(null);
+    setError(null);
+    markerObj.current?.setVisible(false);
+    mapObj.current?.setCenter(ALMENARA_CENTER);
+    mapObj.current?.setZoom(15);
   }
 
   return (
@@ -330,14 +388,14 @@ function PublicPage() {
       >
         <div className="mx-auto w-full max-w-[1400px]">
           <p className="text-xs font-semibold tracking-[0.18em] text-accent uppercase">
-            Iluminação pública · Almenara MG
+            Almenara Vigia · Denúncia comunitária
           </p>
           <h1 className="mt-3 max-w-2xl text-3xl leading-tight font-bold sm:text-4xl">
-            Lâmpada queimada ou apagada? Avise a Cemig em um minuto.
+            Viu um problema na cidade? Denuncie e cobre a prefeitura.
           </h1>
           <p className="mt-3 max-w-xl text-sm text-primary-foreground/80">
-            Sua localização é preenchida automaticamente. Você também pode enviar uma foto do
-            poste e informar seu nome e WhatsApp para receber o aviso da conclusão.
+            Cada denúncia fica pública no mapa, com a contagem de dias sem solução. Comece pela
+            foto — a gente tenta achar o local sozinho.
           </p>
         </div>
       </section>
@@ -349,91 +407,35 @@ function PublicPage() {
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-2xl">
                 ✓
               </div>
-              <h2 className="mt-4 text-xl font-bold text-foreground">Solicitação registrada</h2>
+              <h2 className="mt-4 text-xl font-bold text-foreground">Denúncia registrada!</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Seu protocolo é{" "}
-                <span className="font-semibold text-primary">{protocol}</span>. Guarde esse número
-                para acompanhar o atendimento.
+                Seu protocolo é <span className="font-semibold text-primary">{protocol}</span>.
+                Ela já aparece no mapa público, contando os dias até a prefeitura resolver.
               </p>
+              <Link
+                to="/denuncias"
+                className="mt-6 block w-full rounded-xl bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Ver no mapa de denúncias
+              </Link>
               <button
                 onClick={resetForm}
-                className="mt-6 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                className="mt-3 w-full rounded-xl border border-primary/25 bg-secondary px-4 py-3 text-sm font-semibold text-primary"
               >
-                Registrar outro poste
+                Fazer outra denúncia
               </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <h2 className="text-lg font-bold text-foreground">Dados da solicitação</h2>
+                <h2 className="text-lg font-bold text-foreground">Nova denúncia</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {locating
-                    ? "Buscando sua localização..."
-                    : (message ?? "Clique no mapa ou digite o endereço do poste.")}
+                  {locationHints[locationStatus]}
                 </p>
               </div>
 
               <div>
-                <label
-                  htmlFor="address"
-                  className="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                >
-                  Endereço do poste
-                </label>
-                <div className="mt-2 flex gap-2">
-                  <div className="relative min-w-0 flex-1">
-                    <input
-                      id="address"
-                      value={address}
-                      onChange={(event) => {
-                        setAddress(event.target.value);
-                        setShowSuggestions(true);
-                      }}
-                      onFocus={() => setShowSuggestions(true)}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                      autoComplete="off"
-                      placeholder="Rua, número, bairro e cidade"
-                      maxLength={250}
-                      className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
-                    />
-                    {showSuggestions && suggestions.length > 0 ? (
-                      <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-float">
-                        {suggestions.map((suggestion) => (
-                          <li key={suggestion.placeId}>
-                            <button
-                              type="button"
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => void chooseSuggestion(suggestion)}
-                              className="w-full px-3 py-2.5 text-left text-sm text-foreground hover:bg-secondary"
-                            >
-                              {suggestion.label}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleSearch()}
-                    disabled={searching}
-                    className="rounded-xl border border-primary/25 bg-secondary px-3 py-2.5 text-sm font-semibold text-primary disabled:opacity-60"
-                  >
-                    {searching ? "..." : "Buscar"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="rounded-xl bg-muted px-3 py-2.5 text-xs text-muted-foreground">
-                {point
-                  ? `Ponto confirmado: ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`
-                  : "Nenhum ponto marcado no mapa ainda."}
-              </div>
-
-              <div>
-                <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                  Foto do poste (opcional)
-                </span>
+                <span className={labelClass}>Foto do problema</span>
                 <input
                   ref={photoInputRef}
                   type="file"
@@ -445,14 +447,14 @@ function PublicPage() {
                   <button
                     type="button"
                     onClick={() => photoInputRef.current?.click()}
-                    className="flex-1 rounded-xl border border-dashed border-primary/40 bg-secondary/60 px-3 py-2.5 text-sm font-semibold text-primary"
+                    className="flex-1 rounded-xl border border-dashed border-primary/40 bg-secondary/60 px-3 py-4 text-sm font-semibold text-primary"
                   >
-                    {photo ? "Trocar foto" : "Tirar foto ou escolher da galeria"}
+                    {photo ? "📷 Trocar foto" : "📷 Tirar foto ou escolher da galeria"}
                   </button>
                   {photo ? (
                     <img
                       src={photo}
-                      alt="Foto do poste enviada"
+                      alt="Foto do problema enviada"
                       className="h-14 w-14 rounded-xl border border-border object-cover"
                     />
                   ) : null}
@@ -460,13 +462,132 @@ function PublicPage() {
                 {photoNote ? (
                   <p className="mt-2 text-xs text-muted-foreground">{photoNote}</p>
                 ) : null}
+                {locationStatus === "idle" ? (
+                  <button
+                    type="button"
+                    onClick={() => setLocationStatus("manual")}
+                    className="mt-2 text-xs font-semibold text-primary underline underline-offset-2"
+                  >
+                    Sem foto? Informar o endereço
+                  </button>
+                ) : null}
               </div>
 
+              {locationStatus === "found" ? (
+                <div>
+                  <span className={labelClass}>Local do problema</span>
+                  <div className="mt-2 rounded-xl bg-muted px-3 py-2.5 text-sm text-foreground">
+                    📍 Local encontrado: {address}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setLocationStatus("manual")}
+                    className="mt-2 text-xs font-semibold text-primary underline underline-offset-2"
+                  >
+                    Não é aqui? Digitar endereço
+                  </button>
+                </div>
+              ) : null}
+
+              {locationStatus === "manual" ? (
+                <div>
+                  <label htmlFor="address" className={labelClass}>
+                    Local do problema
+                  </label>
+                  <div className="mt-2 flex gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <input
+                        id="address"
+                        autoFocus
+                        value={address}
+                        onChange={(event) => {
+                          setAddress(event.target.value);
+                          setShowSuggestions(true);
+                        }}
+                        onFocus={() => setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                        autoComplete="off"
+                        placeholder="Rua, número e bairro"
+                        maxLength={250}
+                        className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                      />
+                      {showSuggestions && suggestions.length > 0 ? (
+                        <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-float">
+                          {suggestions.map((suggestion) => (
+                            <li key={suggestion.placeId}>
+                              <button
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => void chooseSuggestion(suggestion)}
+                                className="w-full px-3 py-2.5 text-left text-sm text-foreground hover:bg-secondary"
+                              >
+                                {suggestion.label}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleSearch()}
+                      disabled={searching}
+                      className="rounded-xl border border-primary/25 bg-secondary px-3 py-2.5 text-sm font-semibold text-primary disabled:opacity-60"
+                    >
+                      {searching ? "..." : "Buscar"}
+                    </button>
+                  </div>
+                  <p className="mt-2 rounded-xl bg-muted px-3 py-2.5 text-xs text-muted-foreground">
+                    {point
+                      ? `Ponto marcado: ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`
+                      : "Nenhum ponto marcado no mapa ainda."}
+                  </p>
+                </div>
+              ) : null}
+
               <div>
-                <label
-                  htmlFor="name"
-                  className="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                <label htmlFor="type" className={labelClass}>
+                  Tipo do problema
+                </label>
+                <select
+                  id="type"
+                  value={type}
+                  onChange={(event) => setType(event.target.value as ReportType | "")}
+                  className={inputClass}
                 >
+                  <option value="" disabled>
+                    Selecione o tipo do problema
+                  </option>
+                  {REPORT_TYPES.map((key) => (
+                    <option key={key} value={key}>
+                      {reportTypes[key].emoji} {reportTypes[key].label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {type === "outro" ? (
+                <div>
+                  <label htmlFor="description" className={labelClass}>
+                    Descreva o problema
+                  </label>
+                  <textarea
+                    id="description"
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    placeholder="Ex.: placa de trânsito caída na esquina"
+                    rows={3}
+                    maxLength={280}
+                    className={`${inputClass} resize-none`}
+                  />
+                  <p className="mt-1 text-right text-xs text-muted-foreground">
+                    {description.trim().length}/280
+                  </p>
+                </div>
+              ) : null}
+
+              <div>
+                <label htmlFor="name" className={labelClass}>
                   Seu nome
                 </label>
                 <input
@@ -475,15 +596,12 @@ function PublicPage() {
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Nome completo"
                   maxLength={100}
-                  className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                  className={inputClass}
                 />
               </div>
 
               <div>
-                <label
-                  htmlFor="whatsapp"
-                  className="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                >
+                <label htmlFor="whatsapp" className={labelClass}>
                   WhatsApp
                 </label>
                 <input
@@ -493,8 +611,11 @@ function PublicPage() {
                   placeholder="(33) 99999-0000"
                   inputMode="tel"
                   maxLength={20}
-                  className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/25"
+                  className={inputClass}
                 />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Seu nome e WhatsApp não aparecem publicamente.
+                </p>
               </div>
 
               {error ? (
@@ -507,7 +628,7 @@ function PublicPage() {
                 type="submit"
                 className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
               >
-                Enviar solicitação
+                Enviar denúncia
               </button>
             </form>
           )}
@@ -516,7 +637,7 @@ function PublicPage() {
         <div className="relative min-h-[420px] overflow-hidden rounded-2xl border border-border bg-muted shadow-card lg:min-h-[560px]">
           <div ref={mapRef} className="absolute inset-0" />
           <div className="pointer-events-none absolute top-4 left-4 rounded-full bg-card/95 px-4 py-2 text-xs font-semibold text-foreground shadow-float">
-            Toque no mapa para ajustar o poste
+            Toque no mapa para ajustar o local
           </div>
         </div>
       </main>
