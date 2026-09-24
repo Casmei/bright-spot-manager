@@ -19,13 +19,14 @@ Outros comandos:
 - `bun run db:generate`: depois de mudar `src/db/schema.ts`, gera a migration em `drizzle/`.
   Faça commit dela; a produção aplica sozinha no próximo deploy.
 
-## Rodar como em produção
+## Rodar tudo localmente como em produção
 
 ```sh
 POSTGRES_PASSWORD=troque-isto docker compose up -d --build
 ```
 
-Isso sobe o `db` (Postgres 17, volume `pgdata`) e o `app` na porta 3000 (ou `APP_PORT`). A cada
+Isso sobe o `db` (Postgres 17, volume `pgdata`) e o `app` na porta 3000 (ou `APP_PORT`). Serve
+para testar localmente; em produção o banco é um recurso separado no Coolify (veja abaixo). A cada
 subida, o `app` aplica as migrations pendentes e depois inicia o servidor. As variáveis também
 podem ficar num arquivo `.env` ao lado do `docker-compose.yml`.
 
@@ -53,25 +54,40 @@ podem ficar num arquivo `.env` ao lado do `docker-compose.yml`.
 
 ## Deploy no Coolify (VPS Hostinger)
 
-1. **New Resource → Public/Private Repository**, escolha este repositório e o branch.
-2. **Build Pack: Docker Compose**, arquivo `docker-compose.yml`.
-3. Em **Environment Variables**, cadastre `POSTGRES_PASSWORD`, `VITE_GOOGLE_MAPS_API_KEY`
-   (marque como *Build Variable*) e `GOOGLE_MAPS_API_KEY`.
-4. No serviço `app`, defina o domínio (ex.: `https://vigia.seudominio.com.br:3000`; o `:3000`
-   diz ao proxy do Coolify em que porta o container escuta). O Coolify emite o HTTPS.
-5. Se a porta 3000 do servidor já estiver em uso por outro app, defina `APP_PORT` com outra
-   porta. O acesso público passa pelo proxy do Coolify de qualquer forma.
-6. **Deploy.** Nos logs do `app` devem aparecer `Migrations aplicadas.` e `Listening on`.
-7. Confira a chave do Maps do navegador: no Google Cloud, libere o domínio novo nas restrições
-   de referer.
+Em produção, banco e app são **dois recursos separados** no mesmo projeto do Coolify. O banco
+tem ciclo de vida e backup próprios, e um redeploy do app nunca mexe nele. O
+`docker-compose.yml` não é usado no deploy.
 
-### Backup (não pule)
+### 1. Banco
 
-Os dados e as fotos vivem só no volume `pgdata`.
+1. **New Resource → Database → PostgreSQL**, versão 17, no mesmo projeto e ambiente em que o
+   app vai ficar.
+2. Deixe o banco **sem acesso público** (*Make it publicly available* desligado).
+3. Inicie o banco e copie a **Postgres URL (internal)**. Ela é o `DATABASE_URL` do app.
 
-- Veja se o Coolify oferece **Scheduled Backups** para o serviço `db` desse compose e, se
-  oferecer, configure um backup diário com envio para um storage S3 externo.
-- Se não oferecer, crie uma **Scheduled Task** no Coolify, no serviço `db`, rodando diariamente:
-  `pg_dump -U vigia -Fc vigia > /var/lib/postgresql/data/backup-$(date +%F).dump`,
-  e copie esses arquivos para fora da VPS.
-- Para restaurar: `pg_restore -U vigia -d vigia --clean backup-AAAA-MM-DD.dump`.
+### 2. App
+
+1. **New Resource → Public/Private Repository**, escolha este repositório e o branch `main`.
+2. **Build Pack: Dockerfile** (usa o `Dockerfile` da raiz). **Ports Exposes: `3000`**.
+3. Em **Environment Variables**:
+
+   | Variável | Tipo | Valor |
+   |---|---|---|
+   | `DATABASE_URL` | runtime | a Postgres URL (internal) do passo anterior |
+   | `GOOGLE_MAPS_API_KEY` | runtime | chave do servidor (geocoding) |
+   | `VITE_GOOGLE_MAPS_API_KEY` | **Build Variable** | chave do navegador; é embutida no JavaScript no build |
+
+4. Defina o domínio (ex.: `https://vigia.seudominio.com.br`). O Coolify emite o HTTPS.
+5. **Deploy.** Nos logs devem aparecer `Migrations aplicadas.` e `Listening on`. As migrations
+   rodam a cada subida do container; as que já foram aplicadas são puladas.
+6. No Google Cloud, libere o domínio novo nas restrições de referer da chave do navegador.
+
+### 3. Backup (não pule)
+
+As denúncias e as fotos vivem só no banco.
+
+1. No recurso do Postgres, abra **Backups** e crie um backup agendado (ex.: diário, `0 3 * * *`).
+2. Em **Settings → S3 Storages** do Coolify, cadastre um storage externo (Backblaze B2,
+   Cloudflare R2, AWS S3…) e marque o backup para enviar para ele. Backup só na própria VPS não
+   protege contra perder a VPS.
+3. Teste uma restauração pelo menos uma vez, pela própria tela de backups do Coolify.
