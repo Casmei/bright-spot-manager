@@ -29,3 +29,8 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Almenara Vigia: banco de dados e deploy
+
+As denúncias ficam num Postgres. Desenvolvimento local, `docker compose` e deploy no Coolify
+estão em [`docs/deploy-coolify.md`](docs/deploy-coolify.md).

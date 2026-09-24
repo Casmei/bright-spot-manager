@@ -36,3 +36,6 @@ dist-ssr
 
 # Superpowers scratch
 .superpowers/
+
+# Ajustes locais do docker compose
+docker-compose.override.yml
