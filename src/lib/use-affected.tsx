@@ -9,59 +9,41 @@ import {
 } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { setAffected } from "@/lib/affected.functions";
-import { AFFECTED_ERROR_MESSAGE, type PublicReport } from "@/lib/reports";
-
-type Entry = { count: number; byMe: boolean; error: string | null };
+import { AffectedSync, type AffectedView } from "@/lib/affected-sync";
+import type { PublicReport } from "@/lib/reports";
 
 type Store = {
-  entries: ReadonlyMap<string, Entry>;
-  toggle: (report: PublicReport) => Promise<void>;
+  entries: ReadonlyMap<string, AffectedView>;
+  toggle: (report: PublicReport) => void;
   dismissError: (reportId: string) => void;
 };
 
 const AffectedContext = createContext<Store | null>(null);
 
-function entryOf(report: PublicReport, local: Entry | undefined): Entry {
+function entryOf(report: PublicReport, local: AffectedView | undefined): AffectedView {
   return local ?? { count: report.affectedCount, byMe: report.affectedByMe, error: null };
 }
 
 /* Local overrides on top of the loader data, so the card and the open report always agree. */
 export function AffectedProvider({ children }: { children: ReactNode }) {
-  const [entries, setEntries] = useState<ReadonlyMap<string, Entry>>(new Map());
-  const latest = useRef(entries);
-  latest.current = entries;
-  const sequence = useRef(new Map<string, number>());
+  const [entries, setEntries] = useState<ReadonlyMap<string, AffectedView>>(new Map());
+  const syncs = useRef(new Map<string, AffectedSync>());
   const send = useServerFn(setAffected);
 
-  const put = useCallback((reportId: string, entry: Entry) => {
-    setEntries((prev) => new Map(prev).set(reportId, entry));
-  }, []);
-
   const toggle = useCallback(
-    async (report: PublicReport) => {
-      const before = entryOf(report, latest.current.get(report.id));
-      const wanted = !before.byMe;
-      const call = (sequence.current.get(report.id) ?? 0) + 1;
-      sequence.current.set(report.id, call);
-
-      put(report.id, {
-        count: Math.max(0, before.count + (wanted ? 1 : -1)),
-        byMe: wanted,
-        error: null,
-      });
-
-      const result = await send({ data: { reportId: report.id, affected: wanted } }).catch(
-        () => null,
-      );
-      // A newer click owns the button now
-      if (sequence.current.get(report.id) !== call) return;
-      if (result?.ok) {
-        put(report.id, { count: result.affectedCount, byMe: result.affectedByMe, error: null });
-      } else {
-        put(report.id, { ...before, error: result?.message ?? AFFECTED_ERROR_MESSAGE });
+    (report: PublicReport) => {
+      let sync = syncs.current.get(report.id);
+      if (!sync) {
+        sync = new AffectedSync(
+          { count: report.affectedCount, byMe: report.affectedByMe },
+          (wanted) => send({ data: { reportId: report.id, affected: wanted } }),
+          (view) => setEntries((prev) => new Map(prev).set(report.id, view)),
+        );
+        syncs.current.set(report.id, sync);
       }
+      sync.toggle();
     },
-    [put, send],
+    [send],
   );
 
   const dismissError = useCallback((reportId: string) => {
@@ -81,7 +63,7 @@ export function useAffected(report: PublicReport) {
   if (!store) throw new Error("useAffected precisa estar dentro de AffectedProvider");
   const { toggle: toggleReport, dismissError: dismissReportError } = store;
   const entry = entryOf(report, store.entries.get(report.id));
-  const toggle = useCallback(() => void toggleReport(report), [toggleReport, report]);
+  const toggle = useCallback(() => toggleReport(report), [toggleReport, report]);
   const dismissError = useCallback(
     () => dismissReportError(report.id),
     [dismissReportError, report.id],
