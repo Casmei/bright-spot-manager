@@ -72,10 +72,33 @@ export function waitingSentence(report: Pick<PublicReport, "createdAt">) {
   return `Há ${days} ${days === 1 ? "dia" : "dias"} esperando a prefeitura.`;
 }
 
-/* Message that goes along with the report's link when someone shares it. */
-export function shareMessage(report: Pick<PublicReport, "type" | "address" | "createdAt">) {
+export function affectedPeople(count: number) {
+  return count === 1 ? "1 pessoa" : `${count} pessoas`;
+}
+
+export function affectedAriaLabel(count: number) {
+  return `Me afeta também, ${affectedPeople(count)} ${count === 1 ? "afetada" : "afetadas"}`;
+}
+
+/* Sentence under the button in the report; `lead` is shown in bold. */
+export function affectedSentence({ count, byMe }: { count: number; byMe: boolean }) {
+  if (byMe && count <= 1) return { lead: "", rest: "Você marcou que isso te afeta." };
+  if (byMe)
+    return { lead: `Você e mais ${affectedPeople(count - 1)}`, rest: " dizem que isso as afeta." };
+  if (count === 0) return { lead: "", rest: "Seja o primeiro a dizer que isso te afeta." };
+  if (count === 1) return { lead: "1 pessoa", rest: " diz que isso a afeta." };
+  return { lead: affectedPeople(count), rest: " dizem que isso as afeta." };
+}
+
+/* Message that goes along with the report's link when someone shares it. One person (usually the author) says nothing new. */
+export function shareMessage(
+  report: Pick<PublicReport, "type" | "address" | "createdAt">,
+  affectedCount = 0,
+) {
   const meta = reportTypes[report.type];
-  return `${meta.emoji} ${meta.label} — ${shortAddress(report.address)}. ${waitingSentence(report)} Veja e cobre:`;
+  const affected =
+    affectedCount >= 2 ? ` ${affectedPeople(affectedCount)} dizem que isso as afeta.` : "";
+  return `${meta.emoji} ${meta.label} — ${shortAddress(report.address)}. ${waitingSentence(report)}${affected} Veja e cobre:`;
 }
 
 export function formatProtocol(protocolSeq: number) {
