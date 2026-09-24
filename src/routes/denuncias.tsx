@@ -2,67 +2,77 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/Header";
 import { ALMENARA_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-loader";
-import {
-  formatAge,
-  ticketUrgency,
-  urgencyMeta,
-  useTickets,
-  type Urgency,
-} from "@/lib/tickets";
+import { REPORT_TYPES, reportTypes, type ReportType } from "@/lib/report-types";
+import { formatDaysOpen, usePublicTickets } from "@/lib/tickets";
 
-export const Route = createFileRoute("/interno")({
+export const Route = createFileRoute("/denuncias")({
   head: () => ({
     meta: [
-      { title: "Painel interno de chamados — Cemig Iluminação Pública" },
+      { title: "Denúncias em Almenara — Almenara Vigia" },
       {
         name: "description",
         content:
-          "Mapa e lista dos postes com lâmpadas queimadas aguardando manutenção, priorizados pelo tempo de espera.",
+          "Mapa público das denúncias de problemas urbanos em Almenara e há quantos dias cada uma espera uma resposta da prefeitura.",
       },
-      { property: "og:title", content: "Painel interno de chamados — Cemig" },
+      { property: "og:title", content: "Denúncias em Almenara — Almenara Vigia" },
       {
         property: "og:description",
-        content: "Visualize no mapa todos os chamados de troca de lâmpada por tempo de espera.",
+        content:
+          "Buracos, entulho, lâmpadas queimadas: veja no mapa o que a população denunciou e há quantos dias está sem solução.",
       },
     ],
   }),
-  component: InternalPage,
+  component: ReportsPage,
 });
 
-const filters: Array<{ key: Urgency | "todos"; label: string }> = [
-  { key: "todos", label: "Todos" },
-  { key: "novo", label: "Recentes" },
-  { key: "atencao", label: "Atenção" },
-  { key: "critico", label: "Críticos" },
-];
+const BRAND_HEX = "#a51212";
 
-function InternalPage() {
-  const tickets = useTickets();
+/* Address and description come from the public form; never inject them as HTML. */
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function ReportsPage() {
+  const tickets = usePublicTickets();
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapObj = useRef<any>(null);
   const mapsApi = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
   const infoWindow = useRef<any>(null);
+  const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const [ready, setReady] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Urgency | "todos">("todos");
+  const [filter, setFilter] = useState<ReportType | "todos">("todos");
+
+  const ordered = useMemo(
+    () =>
+      [...tickets].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      ),
+    [tickets],
+  );
 
   const visible = useMemo(
-    () =>
-      tickets
-        .filter((ticket) => filter === "todos" || ticketUrgency(ticket) === filter)
-        .sort(
-          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-        ),
-    [tickets, filter],
+    () => ordered.filter((ticket) => filter === "todos" || ticket.type === filter),
+    [ordered, filter],
   );
 
   const counts = useMemo(() => {
-    const base: Record<Urgency, number> = { novo: 0, atencao: 0, critico: 0 };
-    for (const ticket of tickets) base[ticketUrgency(ticket)] += 1;
+    const base = Object.fromEntries(REPORT_TYPES.map((key) => [key, 0])) as Record<
+      ReportType,
+      number
+    >;
+    for (const ticket of tickets) base[ticket.type] += 1;
     return base;
   }, [tickets]);
+
+  const oldest = ordered[0];
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +97,7 @@ function InternalPage() {
     };
   }, []);
 
-  // Reconcile markers with the visible tickets
+  // Reconcile markers with the visible reports
   useEffect(() => {
     const maps = mapsApi.current;
     const map = mapObj.current;
@@ -102,20 +112,22 @@ function InternalPage() {
     }
 
     for (const ticket of visible) {
-      const urgency = ticketUrgency(ticket);
       const isSelected = selected === ticket.id;
+      const meta = reportTypes[ticket.type];
       const icon = {
         path: maps.SymbolPath.CIRCLE,
-        scale: isSelected ? 13 : 9,
-        fillColor: urgencyMeta[urgency].hex,
+        scale: isSelected ? 18 : 14,
+        fillColor: "#ffffff",
         fillOpacity: 1,
-        strokeColor: "#ffffff",
+        strokeColor: BRAND_HEX,
         strokeWeight: isSelected ? 4 : 2,
       };
+      const label = { text: meta.emoji, fontSize: isSelected ? "20px" : "16px" };
 
       const existing = markers.current.get(ticket.id);
       if (existing) {
         existing.setIcon(icon);
+        existing.setLabel(label);
         existing.setZIndex(isSelected ? 999 : 1);
         continue;
       }
@@ -124,54 +136,69 @@ function InternalPage() {
         map,
         position: { lat: ticket.lat, lng: ticket.lng },
         icon,
-        title: ticket.protocol,
+        label,
+        title: `${meta.label} · ${ticket.protocol}`,
       });
       marker.addListener("click", () => setSelected(ticket.id));
       markers.current.set(ticket.id, marker);
     }
   }, [ready, visible, selected]);
 
-  // Focus the map on the selected ticket
+  // Focus the map on the selected report
   useEffect(() => {
     const map = mapObj.current;
     if (!ready || !map || !selected) return;
     const ticket = visible.find((item) => item.id === selected);
-    if (!ticket) return;
+    if (!ticket) {
+      infoWindow.current?.close();
+      return;
+    }
     map.panTo({ lat: ticket.lat, lng: ticket.lng });
     map.setZoom(16);
     const marker = markers.current.get(ticket.id);
     if (marker && infoWindow.current) {
+      const meta = reportTypes[ticket.type];
       infoWindow.current.setContent(
-        `<div style="font-family:inherit;font-size:12px;max-width:220px"><strong>${ticket.protocol}</strong><br/>${ticket.address}</div>`,
+        `<div style="font-family:inherit;font-size:12px;max-width:240px">` +
+          `<strong>${meta.emoji} ${escapeHtml(meta.label)}</strong> · ${escapeHtml(ticket.protocol)}<br/>` +
+          `${escapeHtml(ticket.address)}<br/>` +
+          `<span style="color:${BRAND_HEX};font-weight:700">${formatDaysOpen(ticket)}</span>` +
+          `</div>`,
       );
       infoWindow.current.open({ anchor: marker, map });
     }
   }, [ready, selected, visible]);
 
+  // Bring the selected card into view when a marker is clicked
+  useEffect(() => {
+    if (!selected) return;
+    cardRefs.current.get(selected)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selected]);
+
   return (
     <div className="min-h-screen bg-background font-sans">
-      <Header variant="interno" />
+      <Header variant="denuncias" />
 
       <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Chamados de iluminação</h1>
+            <h1 className="text-2xl font-bold text-foreground">Denúncias em Almenara</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {tickets.length} postes aguardando manutenção — priorize os mais antigos.
+              {oldest
+                ? `${tickets.length} ${tickets.length === 1 ? "problema aguardando" : "problemas aguardando"} a prefeitura — a mais antiga foi feita ${formatDaysOpen(oldest).toLowerCase()}.`
+                : "Nenhuma denúncia registrada ainda."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(Object.keys(urgencyMeta) as Urgency[]).map((key) => (
+            {REPORT_TYPES.filter((key) => counts[key] > 0).map((key) => (
               <div
                 key={key}
-                className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-card"
+                title={reportTypes[key].label}
+                aria-label={`${reportTypes[key].label}: ${counts[key]}`}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-card"
               >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: urgencyMeta[key].hex }}
-                />
-                {urgencyMeta[key].label}
-                <span className="text-muted-foreground">{counts[key]}</span>
+                <span aria-hidden="true">{reportTypes[key].emoji}</span>
+                <span aria-hidden="true">{counts[key]}</span>
               </div>
             ))}
           </div>
@@ -183,18 +210,18 @@ function InternalPage() {
           </div>
 
           <div className="flex flex-col rounded-2xl border border-border bg-card shadow-card lg:h-[calc(100vh-13rem)]">
-            <div className="flex gap-2 border-b border-border p-4">
-              {filters.map((item) => (
+            <div className="flex flex-wrap gap-2 border-b border-border p-4">
+              {(["todos", ...REPORT_TYPES] as const).map((key) => (
                 <button
-                  key={item.key}
-                  onClick={() => setFilter(item.key)}
+                  key={key}
+                  onClick={() => setFilter(key)}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    filter === item.key
+                    filter === key
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground hover:bg-secondary"
                   }`}
                 >
-                  {item.label}
+                  {key === "todos" ? "Todos" : `${reportTypes[key].emoji} ${reportTypes[key].label}`}
                 </button>
               ))}
             </div>
@@ -202,16 +229,22 @@ function InternalPage() {
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
               {visible.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
-                  Nenhum chamado neste filtro.
+                  {filter === "todos"
+                    ? "Nenhuma denúncia registrada ainda."
+                    : "Nenhuma denúncia deste tipo."}
                 </p>
               ) : null}
 
               {visible.map((ticket) => {
-                const urgency = ticketUrgency(ticket);
+                const meta = reportTypes[ticket.type];
                 const isSelected = selected === ticket.id;
                 return (
                   <button
                     key={ticket.id}
+                    ref={(node) => {
+                      if (node) cardRefs.current.set(ticket.id, node);
+                      else cardRefs.current.delete(ticket.id);
+                    }}
                     onClick={() => setSelected(ticket.id)}
                     className={`w-full rounded-xl border p-4 text-left transition-shadow ${
                       isSelected
@@ -221,29 +254,31 @@ function InternalPage() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: urgencyMeta[urgency].hex }}
-                        />
-                        <span className="text-sm font-bold text-foreground">
-                          {ticket.protocol}
+                        <span aria-hidden="true" className="text-lg">
+                          {meta.emoji}
                         </span>
+                        <span className="text-sm font-bold text-foreground">{meta.label}</span>
                       </div>
-                      <span className="text-xs font-semibold text-muted-foreground">
-                        {formatAge(ticket)}
+                      <span className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-primary-foreground uppercase">
+                        {formatDaysOpen(ticket)}
                       </span>
                     </div>
+                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                      {ticket.protocol}
+                    </p>
                     {ticket.photo ? (
                       <img
                         src={ticket.photo}
-                        alt={`Foto do poste do chamado ${ticket.protocol}`}
+                        alt={`Foto da denúncia ${ticket.protocol}`}
                         className="mt-3 h-28 w-full rounded-lg border border-border object-cover"
                       />
                     ) : null}
                     <p className="mt-2 text-sm text-foreground">{ticket.address}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {ticket.name} · {ticket.whatsapp}
-                    </p>
+                    {ticket.description ? (
+                      <p className="mt-1 text-sm text-muted-foreground italic">
+                        “{ticket.description}”
+                      </p>
+                    ) : null}
                   </button>
                 );
               })}

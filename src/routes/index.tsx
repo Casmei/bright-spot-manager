@@ -300,6 +300,7 @@ function PublicPage() {
       return;
     }
     const ticket = addTicket({
+      type: "lampada",
       name: parsed.data.name,
       whatsapp: parsed.data.whatsapp,
       address: parsed.data.address,

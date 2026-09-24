@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import logoUrl from "@/assets/almenara-vigia-logo.png";
 
-export function Header({ variant = "public" }: { variant?: "public" | "interno" }) {
+export function Header({ variant = "public" }: { variant?: "public" | "denuncias" }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between px-4 sm:px-6">
@@ -14,7 +14,7 @@ export function Header({ variant = "public" }: { variant?: "public" | "interno" 
 
         {variant === "public" ? (
           <Link
-            to="/interno"
+            to="/denuncias"
             className="rounded-full border border-primary/25 bg-secondary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
           >
             Ver denúncias

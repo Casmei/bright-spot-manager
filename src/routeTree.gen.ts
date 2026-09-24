@@ -10,43 +10,43 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as InternoRouteImport } from './routes/interno'
+import { Route as DenunciasRouteImport } from './routes/denuncias'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const InternoRoute = InternoRouteImport.update({
-  id: '/interno',
-  path: '/interno',
+const DenunciasRoute = DenunciasRouteImport.update({
+  id: '/denuncias',
+  path: '/denuncias',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/interno': typeof InternoRoute
+  '/denuncias': typeof DenunciasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/interno': typeof InternoRoute
+  '/denuncias': typeof DenunciasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/interno': typeof InternoRoute
+  '/denuncias': typeof DenunciasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/interno'
+  fullPaths: '/' | '/denuncias'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/interno'
-  id: '__root__' | '/' | '/interno'
+  to: '/' | '/denuncias'
+  id: '__root__' | '/' | '/denuncias'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  InternoRoute: typeof InternoRoute
+  DenunciasRoute: typeof DenunciasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -58,11 +58,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/interno': {
-      id: '/interno'
-      path: '/interno'
-      fullPath: '/interno'
-      preLoaderRoute: typeof InternoRouteImport
+    '/denuncias': {
+      id: '/denuncias'
+      path: '/denuncias'
+      fullPath: '/denuncias'
+      preLoaderRoute: typeof DenunciasRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -70,7 +70,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  InternoRoute: InternoRoute,
+  DenunciasRoute: DenunciasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

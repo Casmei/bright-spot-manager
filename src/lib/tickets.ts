@@ -1,8 +1,11 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
+import type { ReportType } from "@/lib/report-types";
 
 export type Ticket = {
   id: string;
   protocol: string;
+  type: ReportType;
+  description?: string;
   name: string;
   whatsapp: string;
   address: string;
@@ -12,26 +15,35 @@ export type Ticket = {
   photo?: string;
 };
 
-export type Urgency = "novo" | "atencao" | "critico";
+/* What anyone can see: never carries the reporter's name or WhatsApp. */
+export type PublicTicket = Omit<Ticket, "name" | "whatsapp">;
 
 const DAY = 24 * 60 * 60 * 1000;
 
-export function ticketAgeInDays(ticket: Ticket) {
+export function ticketAgeInDays(ticket: Pick<Ticket, "createdAt">) {
   return (Date.now() - new Date(ticket.createdAt).getTime()) / DAY;
 }
 
-export function ticketUrgency(ticket: Ticket): Urgency {
-  const days = ticketAgeInDays(ticket);
-  if (days > 4) return "critico";
-  if (days >= 2) return "atencao";
-  return "novo";
+export function formatDaysOpen(ticket: Pick<Ticket, "createdAt">) {
+  const days = Math.floor(ticketAgeInDays(ticket));
+  if (days <= 0) return "Hoje";
+  return days === 1 ? "Há 1 dia" : `Há ${days} dias`;
 }
 
-export const urgencyMeta: Record<Urgency, { label: string; hex: string; description: string }> = {
-  novo: { label: "Recente", hex: "#16a34a", description: "Aberto há menos de 2 dias" },
-  atencao: { label: "Atenção", hex: "#eab308", description: "Aberto há 2 a 4 dias" },
-  critico: { label: "Crítico", hex: "#dc2626", description: "Aberto há mais de 4 dias" },
-};
+/* Allowlist on purpose: new private fields stay out of the public view by default. */
+export function toPublic(ticket: Ticket): PublicTicket {
+  return {
+    id: ticket.id,
+    protocol: ticket.protocol,
+    type: ticket.type,
+    address: ticket.address,
+    lat: ticket.lat,
+    lng: ticket.lng,
+    createdAt: ticket.createdAt,
+    ...(ticket.description ? { description: ticket.description } : {}),
+    ...(ticket.photo ? { photo: ticket.photo } : {}),
+  };
+}
 
 function daysAgo(days: number) {
   return new Date(Date.now() - days * DAY).toISOString();
@@ -41,13 +53,14 @@ let counter = 1042;
 
 function makeProtocol() {
   counter += 1;
-  return `LMP-${counter}`;
+  return `AV-${counter}`;
 }
 
 let tickets: Ticket[] = [
   {
     id: "1",
-    protocol: "LMP-1021",
+    protocol: "AV-1021",
+    type: "buraco",
     name: "Marina Alves",
     whatsapp: "(33) 99812-4410",
     address: "Av. Nossa Senhora do Amparo, 300 - Centro, Almenara - MG",
@@ -57,7 +70,8 @@ let tickets: Ticket[] = [
   },
   {
     id: "2",
-    protocol: "LMP-1024",
+    protocol: "AV-1024",
+    type: "lampada",
     name: "Carlos Teixeira",
     whatsapp: "(33) 99120-7788",
     address: "Rua Cel. Jonas Loures, 120 - Centro, Almenara - MG",
@@ -67,7 +81,8 @@ let tickets: Ticket[] = [
   },
   {
     id: "3",
-    protocol: "LMP-1029",
+    protocol: "AV-1029",
+    type: "entulho",
     name: "Juliana Prado",
     whatsapp: "(33) 98444-1201",
     address: "Rua Manoel Esteves, 45 - Vila Nova, Almenara - MG",
@@ -77,7 +92,8 @@ let tickets: Ticket[] = [
   },
   {
     id: "4",
-    protocol: "LMP-1031",
+    protocol: "AV-1031",
+    type: "esgoto",
     name: "Rafael Souza",
     whatsapp: "(33) 99666-3040",
     address: "Rua Joaquim Pedro, 890 - São Geraldo, Almenara - MG",
@@ -87,7 +103,8 @@ let tickets: Ticket[] = [
   },
   {
     id: "5",
-    protocol: "LMP-1035",
+    protocol: "AV-1035",
+    type: "mato",
     name: "Beatriz Lima",
     whatsapp: "(33) 99001-5522",
     address: "Rua das Palmeiras, 210 - Bela Vista, Almenara - MG",
@@ -97,17 +114,20 @@ let tickets: Ticket[] = [
   },
   {
     id: "6",
-    protocol: "LMP-1038",
+    protocol: "AV-1038",
+    type: "buraco",
     name: "Eduardo Nunes",
     whatsapp: "(33) 98777-9090",
     address: "Av. Pedro Versiani, 1500 - Jardim Vitória, Almenara - MG",
     lat: -16.1745,
     lng: -40.6862,
-    createdAt: daysAgo(7.5),
+    createdAt: daysAgo(12.5),
   },
   {
     id: "7",
-    protocol: "LMP-1040",
+    protocol: "AV-1040",
+    type: "outro",
+    description: "Placa de 'Pare' caída na esquina; os carros estão passando direto.",
     name: "Sandra Rocha",
     whatsapp: "(33) 99433-1188",
     address: "Rua Santo Antônio, 77 - Santo Antônio, Almenara - MG",
@@ -148,12 +168,7 @@ export function useTickets() {
   );
 }
 
-export function formatAge(ticket: Ticket) {
-  const days = ticketAgeInDays(ticket);
-  if (days < 1) {
-    const hours = Math.max(1, Math.round(days * 24));
-    return `${hours}h atrás`;
-  }
-  const rounded = Math.floor(days);
-  return rounded === 1 ? "1 dia atrás" : `${rounded} dias atrás`;
+export function usePublicTickets() {
+  const all = useTickets();
+  return useMemo(() => all.map(toPublic), [all]);
 }
