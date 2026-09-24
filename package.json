@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun --env-file=.env scripts/migrate.ts",
     "db:seed": "bun --env-file=.env scripts/seed.ts",
@@ -93,6 +94,7 @@
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "8.1.5"
+    "vite": "8.1.5",
+    "vitest": "^5.0.1"
   }
 }

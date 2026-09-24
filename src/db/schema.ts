@@ -1,9 +1,11 @@
 import {
   customType,
   doublePrecision,
+  index,
   integer,
   pgSequence,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -42,3 +44,17 @@ export const reportPhotos = pgTable("report_photos", {
   contentType: text("content_type").notNull(),
   data: bytea("data").notNull(),
 });
+
+/* "Me afeta também": one mark per anonymous visitor (cookie) per report. The IP is only kept as an HMAC. */
+export const reportAffected = pgTable(
+  "report_affected",
+  {
+    reportId: uuid("report_id")
+      .notNull()
+      .references(() => reports.id, { onDelete: "cascade" }),
+    voterId: uuid("voter_id").notNull(),
+    ipHash: text("ip_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.reportId, t.voterId] }), index().on(t.reportId, t.ipHash)],
+);
