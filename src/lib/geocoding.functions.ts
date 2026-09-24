@@ -5,6 +5,15 @@ import { z } from "zod";
 const SEARCH_CENTER = { latitude: -16.1836, longitude: -40.6947 };
 const SEARCH_RADIUS_METERS = 60000;
 
+/* Keeps searches inside the city: appends Almenara when the text does not mention it. */
+function withAlmenara(text: string) {
+  const normalized = text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return normalized.includes("almenara") ? text : `${text}, Almenara - MG`;
+}
+
 function credentials() {
   const mapsKey = process.env["GOOGLE_MAPS_API_KEY"];
   if (!mapsKey) {
@@ -51,7 +60,7 @@ export const geocodeAddress = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) =>
     z.object({ address: z.string().trim().min(5).max(250) }).parse(data),
   )
-  .handler(async ({ data }) => callGeocode({ address: data.address }));
+  .handler(async ({ data }) => callGeocode({ address: withAlmenara(data.address) }));
 
 export const reverseGeocode = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) =>
@@ -83,7 +92,7 @@ export const suggestAddresses = createServerFn({ method: "POST" })
           "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text",
       },
       body: JSON.stringify({
-        input: data.input,
+        input: withAlmenara(data.input),
         sessionToken: data.sessionToken,
         languageCode: "pt-BR",
         regionCode: "BR",
