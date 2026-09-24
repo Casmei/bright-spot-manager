@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Link } from "@tanstack/react-router";
 import { Clock, Expand, MapPin, X } from "lucide-react";
+import { AffectedButton } from "@/components/AffectedButton";
 import { ShareReport } from "@/components/ShareReport";
 import { reportTypes } from "@/lib/report-types";
 import {
@@ -13,6 +14,7 @@ import {
   type PublicReport,
   type Urgency,
 } from "@/lib/reports";
+import { useAffected } from "@/lib/use-affected";
 
 const urgencyIconClass: Record<Urgency, string> = {
   recente: "bg-muted text-foreground",
@@ -77,6 +79,7 @@ export function ReportDialog({
   const days = daysOpen(report);
   const urgency = urgencyOf(report);
   const street = shortAddress(report.address);
+  const { count: affectedCount } = useAffected(report);
 
   return (
     <DialogShell
@@ -161,11 +164,14 @@ export function ReportDialog({
           </a>
         </div>
 
-        <div className="mt-auto border-t border-border pt-5">
-          <p className="mb-3 text-sm font-semibold text-foreground">
-            Quanto mais gente vê, mais difícil ignorar.
-          </p>
-          <ShareReport url={url} message={shareMessage(report)} />
+        <div className="mt-auto grid gap-5 border-t border-border pt-5">
+          <AffectedButton report={report} variant="full" />
+          <div>
+            <p className="mb-3 text-sm font-semibold text-foreground">
+              Quanto mais gente vê, mais difícil ignorar.
+            </p>
+            <ShareReport url={url} message={shareMessage(report, affectedCount)} />
+          </div>
         </div>
       </div>
     </DialogShell>

@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Google Maps JS API é carregada sem tipos */
 import { Link, Outlet, createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AffectedButton } from "@/components/AffectedButton";
 import { DaysOpenBadge } from "@/components/DaysOpenBadge";
 import { Header } from "@/components/Header";
 import { ALMENARA_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-loader";
 import { REPORT_TYPES, reportTypes, type ReportType } from "@/lib/report-types";
 import { daysOpen, shortAddress, type PublicReport } from "@/lib/reports";
 import { listPublicReports } from "@/lib/reports.functions";
+import { AffectedProvider } from "@/lib/use-affected";
 
 export const Route = createFileRoute("/denuncias")({
   head: () => ({
@@ -49,7 +51,7 @@ function ReportsPage() {
   const mapObj = useRef<any>(null);
   const mapsApi = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
-  const cardRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
 
   const [ready, setReady] = useState(false);
   const [filter, setFilter] = useState<ReportType | "todos">("todos");
@@ -179,116 +181,130 @@ function ReportsPage() {
   }, [selected]);
 
   return (
-    <div className="min-h-screen bg-background font-sans">
-      <Header variant="denuncias" />
+    <AffectedProvider>
+      <div className="min-h-screen bg-background font-sans">
+        <Header variant="denuncias" />
 
-      <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Denúncias em Almenara</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{waitingSummary(reports, oldest)}</p>
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_minmax(0,420px)]">
-          <div className="relative h-[420px] overflow-hidden rounded-2xl border border-border bg-muted shadow-card lg:h-[calc(100vh-13rem)]">
-            <div ref={mapRef} className="absolute inset-0" />
+        <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Denúncias em Almenara</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {waitingSummary(reports, oldest)}
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-col rounded-2xl border border-border bg-card shadow-card lg:h-[calc(100vh-13rem)]">
-            <div className="flex flex-wrap gap-2 border-b border-border p-4">
-              {(["todos", ...REPORT_TYPES] as const).map((key) => {
-                const count = key === "todos" ? reports.length : counts[key];
-                const active = filter === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setFilter(key)}
-                    disabled={count === 0 && !active}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-default disabled:opacity-45 ${
-                      active
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground enabled:hover:bg-secondary"
-                    }`}
-                  >
-                    {key === "todos"
-                      ? "Todos"
-                      : `${reportTypes[key].emoji} ${reportTypes[key].label}`}
-                    <span
-                      className={`rounded-full px-1.5 text-[11px] ${
-                        active ? "bg-primary-foreground/20" : "bg-card"
+          <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_minmax(0,420px)]">
+            <div className="relative h-[420px] overflow-hidden rounded-2xl border border-border bg-muted shadow-card lg:h-[calc(100vh-13rem)]">
+              <div ref={mapRef} className="absolute inset-0" />
+            </div>
+
+            <div className="flex flex-col rounded-2xl border border-border bg-card shadow-card lg:h-[calc(100vh-13rem)]">
+              <div className="flex flex-wrap gap-2 border-b border-border p-4">
+                {(["todos", ...REPORT_TYPES] as const).map((key) => {
+                  const count = key === "todos" ? reports.length : counts[key];
+                  const active = filter === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setFilter(key)}
+                      disabled={count === 0 && !active}
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-default disabled:opacity-45 ${
+                        active
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground enabled:hover:bg-secondary"
                       }`}
                     >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                      {key === "todos"
+                        ? "Todos"
+                        : `${reportTypes[key].emoji} ${reportTypes[key].label}`}
+                      <span
+                        className={`rounded-full px-1.5 text-[11px] ${
+                          active ? "bg-primary-foreground/20" : "bg-card"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto p-4">
-              {visible.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">
-                  {filter === "todos"
-                    ? "Nenhuma denúncia registrada ainda."
-                    : "Nenhuma denúncia deste tipo."}
-                </p>
-              ) : null}
+              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                {visible.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    {filter === "todos"
+                      ? "Nenhuma denúncia registrada ainda."
+                      : "Nenhuma denúncia deste tipo."}
+                  </p>
+                ) : null}
 
-              {visible.map((report) => {
-                const meta = reportTypes[report.type];
-                const isSelected = selected === report.id;
-                return (
-                  <Link
-                    key={report.id}
-                    ref={(node) => {
-                      if (node) cardRefs.current.set(report.id, node);
-                      else cardRefs.current.delete(report.id);
-                    }}
-                    to="/denuncias/$protocol"
-                    params={{ protocol: report.protocol }}
-                    state={{ fromList: true }}
-                    resetScroll={false}
-                    className={`group block overflow-hidden rounded-xl border transition-shadow ${
-                      isSelected
-                        ? "border-primary shadow-float"
-                        : "border-border bg-card hover:shadow-float"
-                    }`}
-                  >
-                    <div className="relative aspect-[4/3] overflow-hidden bg-neutral-900">
-                      <img
-                        src={report.photoUrl}
-                        alt={`Foto da denúncia: ${meta.label} em ${shortAddress(report.address)}`}
-                        loading="lazy"
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                      />
-                      <div className="absolute top-2.5 right-2.5">
-                        <DaysOpenBadge report={report} />
+                {visible.map((report) => {
+                  const meta = reportTypes[report.type];
+                  const isSelected = selected === report.id;
+                  return (
+                    <article
+                      key={report.id}
+                      ref={(node) => {
+                        if (node) cardRefs.current.set(report.id, node);
+                        else cardRefs.current.delete(report.id);
+                      }}
+                      className={`group relative overflow-hidden rounded-xl border transition-shadow has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring ${
+                        isSelected
+                          ? "border-primary shadow-float"
+                          : "border-border bg-card hover:shadow-float"
+                      }`}
+                    >
+                      <div className="relative aspect-[4/3] overflow-hidden bg-neutral-900">
+                        <img
+                          src={report.photoUrl}
+                          alt={`Foto da denúncia: ${meta.label} em ${shortAddress(report.address)}`}
+                          loading="lazy"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                        />
+                        <div className="absolute top-2.5 right-2.5">
+                          <DaysOpenBadge report={report} />
+                        </div>
                       </div>
-                    </div>
-                    <div className="p-3.5">
-                      <p className="flex items-center gap-2 text-sm font-bold text-foreground">
-                        <span aria-hidden="true">{meta.emoji}</span>
-                        {meta.label}
-                      </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {shortAddress(report.address)}
-                      </p>
-                      {report.description ? (
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground italic">
-                          “{report.description}”
+                      <div className="p-3.5">
+                        <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+                          <span aria-hidden="true">{meta.emoji}</span>
+                          {/* The link's ::after covers the whole card, so tapping anywhere still opens it */}
+                          <Link
+                            to="/denuncias/$protocol"
+                            params={{ protocol: report.protocol }}
+                            state={{ fromList: true }}
+                            resetScroll={false}
+                            className="outline-none after:absolute after:inset-0 after:content-['']"
+                          >
+                            {meta.label}
+                            <span className="sr-only"> em {shortAddress(report.address)}</span>
+                          </Link>
                         </p>
-                      ) : null}
-                    </div>
-                  </Link>
-                );
-              })}
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {shortAddress(report.address)}
+                        </p>
+                        {report.description ? (
+                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground italic">
+                            “{report.description}”
+                          </p>
+                        ) : null}
+                        {/* Above the link's overlay: marking never opens the report */}
+                        <div className="relative z-10 mt-3">
+                          <AffectedButton report={report} variant="compact" />
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
 
-      <Outlet />
-    </div>
+        <Outlet />
+      </div>
+    </AffectedProvider>
   );
 }
