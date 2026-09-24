@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DenunciasRouteImport } from './routes/denuncias'
+import { Route as FotosIdRouteImport } from './routes/fotos.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const DenunciasRoute = DenunciasRouteImport.update({
   path: '/denuncias',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FotosIdRoute = FotosIdRouteImport.update({
+  id: '/fotos/$id',
+  path: '/fotos/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/denuncias': typeof DenunciasRoute
+  '/fotos/$id': typeof FotosIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/denuncias': typeof DenunciasRoute
+  '/fotos/$id': typeof FotosIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/denuncias': typeof DenunciasRoute
+  '/fotos/$id': typeof FotosIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/denuncias'
+  fullPaths: '/' | '/denuncias' | '/fotos/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/denuncias'
-  id: '__root__' | '/' | '/denuncias'
+  to: '/' | '/denuncias' | '/fotos/$id'
+  id: '__root__' | '/' | '/denuncias' | '/fotos/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DenunciasRoute: typeof DenunciasRoute
+  FotosIdRoute: typeof FotosIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DenunciasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/fotos/$id': {
+      id: '/fotos/$id'
+      path: '/fotos/$id'
+      fullPath: '/fotos/$id'
+      preLoaderRoute: typeof FotosIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DenunciasRoute: DenunciasRoute,
+  FotosIdRoute: FotosIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

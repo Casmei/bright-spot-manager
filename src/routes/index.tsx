@@ -2,11 +2,11 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 import { Header } from "@/components/Header";
 import { ALMENARA_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-loader";
 import { REPORT_TYPES, reportTypes, type ReportType } from "@/lib/report-types";
-import { addTicket } from "@/lib/tickets";
+import { PHOTO_REQUIRED_MESSAGE, reportFormSchema } from "@/lib/report-schema";
+import { createReport } from "@/lib/reports.functions";
 import {
   geocodeAddress,
   placeDetails,
@@ -36,31 +36,6 @@ export const Route = createFileRoute("/")({
   }),
   component: PublicPage,
 });
-
-const formSchema = z
-  .object({
-    type: z.enum(REPORT_TYPES, {
-      errorMap: () => ({ message: "Selecione o tipo do problema" }),
-    }),
-    description: z.string().trim().max(280, "Use no máximo 280 caracteres na descrição"),
-    address: z.string().trim().min(5, "Informe ou confirme o endereço do problema").max(250),
-    name: z.string().trim().min(3, "Informe seu nome completo").max(100),
-    whatsapp: z
-      .string()
-      .trim()
-      .min(10, "Informe um WhatsApp com DDD")
-      .max(20)
-      .regex(/^[0-9()+\-\s]+$/, "Use apenas números, espaços e parênteses"),
-  })
-  .superRefine((data, ctx) => {
-    if (data.type === "outro" && data.description.length < 10) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["description"],
-        message: "Descreva o problema com pelo menos 10 caracteres",
-      });
-    }
-  });
 
 type LocationStatus = "idle" | "locating" | "found" | "manual";
 
@@ -127,11 +102,13 @@ function PublicPage() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [protocol, setProtocol] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const findAddress = useServerFn(geocodeAddress);
   const findPoint = useServerFn(reverseGeocode);
   const findSuggestions = useServerFn(suggestAddresses);
   const findPlace = useServerFn(placeDetails);
+  const sendReport = useServerFn(createReport);
 
   function ensureSession() {
     if (!sessionToken.current) sessionToken.current = crypto.randomUUID();
@@ -355,7 +332,12 @@ function PublicPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     setError(null);
+    if (!photo) {
+      setError(PHOTO_REQUIRED_MESSAGE);
+      return;
+    }
     let target = point;
     // A typed address that was never searched still counts: look it up now
     if (!target && address.trim().length >= 5) target = await handleSearch();
@@ -365,22 +347,24 @@ function PublicPage() {
       }
       return;
     }
-    const parsed = formSchema.safeParse({ type, description, address, name, whatsapp });
+    const parsed = reportFormSchema.safeParse({ type, description, address, name, whatsapp });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Verifique os dados informados.");
       return;
     }
-    const ticket = addTicket({
-      type: parsed.data.type,
-      ...(parsed.data.type === "outro" ? { description: parsed.data.description } : {}),
-      name: parsed.data.name,
-      whatsapp: parsed.data.whatsapp,
-      address: parsed.data.address,
-      lat: target.lat,
-      lng: target.lng,
-      ...(photo ? { photo } : {}),
-    });
-    setProtocol(ticket.protocol);
+    setSubmitting(true);
+    try {
+      const result = await sendReport({
+        data: { ...parsed.data, lat: target.lat, lng: target.lng, photo },
+      });
+      setProtocol(result.protocol);
+    } catch (err) {
+      // Keeps everything the person typed so they can just try again
+      console.error(err);
+      setError("Não foi possível enviar agora. Tente de novo.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function resetForm() {
@@ -654,9 +638,10 @@ function PublicPage() {
 
               <button
                 type="submit"
-                className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                disabled={submitting}
+                className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
               >
-                Enviar denúncia
+                {submitting ? "Enviando..." : "Enviar denúncia"}
               </button>
             </form>
           )}

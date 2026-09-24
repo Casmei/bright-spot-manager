@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/Header";
 import { ALMENARA_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-loader";
 import { REPORT_TYPES, reportTypes, type ReportType } from "@/lib/report-types";
-import { formatDaysOpen, usePublicTickets } from "@/lib/tickets";
+import { formatDaysOpen } from "@/lib/reports";
+import { listPublicReports } from "@/lib/reports.functions";
 
 export const Route = createFileRoute("/denuncias")({
   head: () => ({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/denuncias")({
       },
     ],
   }),
+  loader: () => listPublicReports(),
   component: ReportsPage,
 });
 
@@ -39,7 +41,7 @@ function escapeHtml(text: string) {
 }
 
 function ReportsPage() {
-  const tickets = usePublicTickets();
+  const reports = Route.useLoaderData();
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapObj = useRef<any>(null);
   const mapsApi = useRef<any>(null);
@@ -53,14 +55,14 @@ function ReportsPage() {
 
   const ordered = useMemo(
     () =>
-      [...tickets].sort(
+      [...reports].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       ),
-    [tickets],
+    [reports],
   );
 
   const visible = useMemo(
-    () => ordered.filter((ticket) => filter === "todos" || ticket.type === filter),
+    () => ordered.filter((report) => filter === "todos" || report.type === filter),
     [ordered, filter],
   );
 
@@ -69,9 +71,9 @@ function ReportsPage() {
       ReportType,
       number
     >;
-    for (const ticket of tickets) base[ticket.type] += 1;
+    for (const report of reports) base[report.type] += 1;
     return base;
-  }, [tickets]);
+  }, [reports]);
 
   const oldest = ordered[0];
 
@@ -104,7 +106,7 @@ function ReportsPage() {
     const map = mapObj.current;
     if (!ready || !maps || !map) return;
 
-    const keep = new Set(visible.map((ticket) => ticket.id));
+    const keep = new Set(visible.map((report) => report.id));
     for (const [id, marker] of markers.current) {
       if (!keep.has(id)) {
         marker.setMap(null);
@@ -112,9 +114,9 @@ function ReportsPage() {
       }
     }
 
-    for (const ticket of visible) {
-      const isSelected = selected === ticket.id;
-      const meta = reportTypes[ticket.type];
+    for (const report of visible) {
+      const isSelected = selected === report.id;
+      const meta = reportTypes[report.type];
       const icon = {
         path: maps.SymbolPath.CIRCLE,
         scale: isSelected ? 18 : 14,
@@ -125,7 +127,7 @@ function ReportsPage() {
       };
       const label = { text: meta.emoji, fontSize: isSelected ? "20px" : "16px" };
 
-      const existing = markers.current.get(ticket.id);
+      const existing = markers.current.get(report.id);
       if (existing) {
         existing.setIcon(icon);
         existing.setLabel(label);
@@ -135,13 +137,13 @@ function ReportsPage() {
 
       const marker = new maps.Marker({
         map,
-        position: { lat: ticket.lat, lng: ticket.lng },
+        position: { lat: report.lat, lng: report.lng },
         icon,
         label,
-        title: `${meta.label} · ${ticket.protocol}`,
+        title: `${meta.label} · ${report.protocol}`,
       });
-      marker.addListener("click", () => setSelected(ticket.id));
-      markers.current.set(ticket.id, marker);
+      marker.addListener("click", () => setSelected(report.id));
+      markers.current.set(report.id, marker);
     }
   }, [ready, visible, selected]);
 
@@ -149,21 +151,21 @@ function ReportsPage() {
   useEffect(() => {
     const map = mapObj.current;
     if (!ready || !map || !selected) return;
-    const ticket = visible.find((item) => item.id === selected);
-    if (!ticket) {
+    const report = visible.find((item) => item.id === selected);
+    if (!report) {
       infoWindow.current?.close();
       return;
     }
-    map.panTo({ lat: ticket.lat, lng: ticket.lng });
+    map.panTo({ lat: report.lat, lng: report.lng });
     map.setZoom(16);
-    const marker = markers.current.get(ticket.id);
+    const marker = markers.current.get(report.id);
     if (marker && infoWindow.current) {
-      const meta = reportTypes[ticket.type];
+      const meta = reportTypes[report.type];
       infoWindow.current.setContent(
         `<div style="font-family:inherit;font-size:12px;max-width:240px">` +
-          `<strong>${meta.emoji} ${escapeHtml(meta.label)}</strong> · ${escapeHtml(ticket.protocol)}<br/>` +
-          `${escapeHtml(ticket.address)}<br/>` +
-          `<span style="color:${BRAND_HEX};font-weight:700">${formatDaysOpen(ticket)}</span>` +
+          `<strong>${meta.emoji} ${escapeHtml(meta.label)}</strong> · ${escapeHtml(report.protocol)}<br/>` +
+          `${escapeHtml(report.address)}<br/>` +
+          `<span style="color:${BRAND_HEX};font-weight:700">${formatDaysOpen(report)}</span>` +
           `</div>`,
       );
       infoWindow.current.open({ anchor: marker, map });
@@ -186,7 +188,7 @@ function ReportsPage() {
             <h1 className="text-2xl font-bold text-foreground">Denúncias em Almenara</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {oldest
-                ? `${tickets.length} ${tickets.length === 1 ? "problema aguardando" : "problemas aguardando"} a prefeitura — a mais antiga foi feita ${formatDaysOpen(oldest).toLowerCase()}.`
+                ? `${reports.length} ${reports.length === 1 ? "problema aguardando" : "problemas aguardando"} a prefeitura — a mais antiga foi feita ${formatDaysOpen(oldest).toLowerCase()}.`
                 : "Nenhuma denúncia registrada ainda."}
             </p>
           </div>
@@ -238,17 +240,17 @@ function ReportsPage() {
                 </p>
               ) : null}
 
-              {visible.map((ticket) => {
-                const meta = reportTypes[ticket.type];
-                const isSelected = selected === ticket.id;
+              {visible.map((report) => {
+                const meta = reportTypes[report.type];
+                const isSelected = selected === report.id;
                 return (
                   <button
-                    key={ticket.id}
+                    key={report.id}
                     ref={(node) => {
-                      if (node) cardRefs.current.set(ticket.id, node);
-                      else cardRefs.current.delete(ticket.id);
+                      if (node) cardRefs.current.set(report.id, node);
+                      else cardRefs.current.delete(report.id);
                     }}
-                    onClick={() => setSelected(ticket.id)}
+                    onClick={() => setSelected(report.id)}
                     className={`w-full rounded-xl border p-4 text-left transition-shadow ${
                       isSelected
                         ? "border-primary bg-secondary shadow-float"
@@ -263,23 +265,22 @@ function ReportsPage() {
                         <span className="text-sm font-bold text-foreground">{meta.label}</span>
                       </div>
                       <span className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-primary-foreground uppercase">
-                        {formatDaysOpen(ticket)}
+                        {formatDaysOpen(report)}
                       </span>
                     </div>
                     <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                      {ticket.protocol}
+                      {report.protocol}
                     </p>
-                    {ticket.photo ? (
-                      <img
-                        src={ticket.photo}
-                        alt={`Foto da denúncia ${ticket.protocol}`}
-                        className="mt-3 h-28 w-full rounded-lg border border-border object-cover"
-                      />
-                    ) : null}
-                    <p className="mt-2 text-sm text-foreground">{ticket.address}</p>
-                    {ticket.description ? (
+                    <img
+                      src={report.photoUrl}
+                      alt={`Foto da denúncia ${report.protocol}`}
+                      loading="lazy"
+                      className="mt-3 h-28 w-full rounded-lg border border-border object-cover"
+                    />
+                    <p className="mt-2 text-sm text-foreground">{report.address}</p>
+                    {report.description ? (
                       <p className="mt-1 text-sm text-muted-foreground italic">
-                        “{ticket.description}”
+                        “{report.description}”
                       </p>
                     ) : null}
                   </button>
