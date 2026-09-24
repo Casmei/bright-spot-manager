@@ -1,4 +1,7 @@
 # Só o banco, para desenvolver com `bun dev`: docker compose -f docker-compose.dev.yml up -d
+# Nome de projeto próprio: assim ele não substitui o container `db` do docker-compose.yml.
+name: almenara-vigia-dev
+
 services:
   db:
     image: postgres:17-alpine
@@ -18,3 +21,4 @@ services:
 
 volumes:
   pgdata-dev:
+    name: bright-spot-manager_pgdata-dev
