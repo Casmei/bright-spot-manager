@@ -1,14 +1,14 @@
 import { Link } from "@tanstack/react-router";
-import logoUrl from "@/assets/cemig-logo.png";
+import logoUrl from "@/assets/almenara-vigia-logo.png";
 
 export function Header({ variant = "public" }: { variant?: "public" | "interno" }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-3">
-          <img src={logoUrl} alt="Cemig" className="h-7 w-auto" />
-          <span className="hidden text-sm font-semibold text-muted-foreground sm:inline">
-            Iluminação Pública
+          <img src={logoUrl} alt="" className="h-9 w-9 rounded-lg" />
+          <span className="text-base font-extrabold tracking-tight text-foreground uppercase">
+            Almenara Vigia
           </span>
         </Link>
 
@@ -17,14 +17,14 @@ export function Header({ variant = "public" }: { variant?: "public" | "interno" 
             to="/interno"
             className="rounded-full border border-primary/25 bg-secondary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
           >
-            Visão interna Cemig
+            Ver denúncias
           </Link>
         ) : (
           <Link
             to="/"
             className="rounded-full border border-primary/25 bg-secondary px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
           >
-            Abrir nova solicitação
+            Fazer denúncia
           </Link>
         )}
       </div>

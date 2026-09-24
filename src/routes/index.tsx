@@ -122,7 +122,7 @@ function PublicPage() {
           icon: {
             path: maps.SymbolPath.CIRCLE,
             scale: 11,
-            fillColor: "#0f6b4f",
+            fillColor: "#a51212",
             fillOpacity: 1,
             strokeColor: "#ffffff",
             strokeWeight: 3,

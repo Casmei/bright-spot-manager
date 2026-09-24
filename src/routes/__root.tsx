@@ -77,10 +77,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Cemig Iluminação Pública" },
+      { title: "Almenara Vigia — Denúncias da cidade" },
       {
         name: "description",
-        content: "Solicitações de troca de lâmpadas de iluminação pública.",
+        content:
+          "Portal comunitário de denúncias de problemas urbanos em Almenara (MG), com a contagem de dias sem solução.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -108,7 +109,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
       </head>
