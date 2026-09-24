@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DenunciasRouteImport } from './routes/denuncias'
+import { Route as DenunciasProtocolRouteImport } from './routes/denuncias.$protocol'
 import { Route as FotosIdRouteImport } from './routes/fotos.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const DenunciasRoute = DenunciasRouteImport.update({
   path: '/denuncias',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DenunciasProtocolRoute = DenunciasProtocolRouteImport.update({
+  id: '/$protocol',
+  path: '/$protocol',
+  getParentRoute: () => DenunciasRoute,
+} as any)
 const FotosIdRoute = FotosIdRouteImport.update({
   id: '/fotos/$id',
   path: '/fotos/$id',
@@ -31,31 +37,34 @@ const FotosIdRoute = FotosIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/denuncias': typeof DenunciasRoute
+  '/denuncias': typeof DenunciasRouteWithChildren
+  '/denuncias/$protocol': typeof DenunciasProtocolRoute
   '/fotos/$id': typeof FotosIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/denuncias': typeof DenunciasRoute
+  '/denuncias': typeof DenunciasRouteWithChildren
+  '/denuncias/$protocol': typeof DenunciasProtocolRoute
   '/fotos/$id': typeof FotosIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/denuncias': typeof DenunciasRoute
+  '/denuncias': typeof DenunciasRouteWithChildren
+  '/denuncias/$protocol': typeof DenunciasProtocolRoute
   '/fotos/$id': typeof FotosIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/denuncias' | '/fotos/$id'
+  fullPaths: '/' | '/denuncias' | '/denuncias/$protocol' | '/fotos/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/denuncias' | '/fotos/$id'
-  id: '__root__' | '/' | '/denuncias' | '/fotos/$id'
+  to: '/' | '/denuncias' | '/denuncias/$protocol' | '/fotos/$id'
+  id: '__root__' | '/' | '/denuncias' | '/denuncias/$protocol' | '/fotos/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DenunciasRoute: typeof DenunciasRoute
+  DenunciasRoute: typeof DenunciasRouteWithChildren
   FotosIdRoute: typeof FotosIdRoute
 }
 
@@ -75,6 +84,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DenunciasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/denuncias/$protocol': {
+      id: '/denuncias/$protocol'
+      path: '/$protocol'
+      fullPath: '/denuncias/$protocol'
+      preLoaderRoute: typeof DenunciasProtocolRouteImport
+      parentRoute: typeof DenunciasRoute
+    }
     '/fotos/$id': {
       id: '/fotos/$id'
       path: '/fotos/$id'
@@ -85,9 +101,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface DenunciasRouteChildren {
+  DenunciasProtocolRoute: typeof DenunciasProtocolRoute
+}
+
+const DenunciasRouteChildren: DenunciasRouteChildren = {
+  DenunciasProtocolRoute: DenunciasProtocolRoute,
+}
+
+const DenunciasRouteWithChildren = DenunciasRoute._addFileChildren(
+  DenunciasRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DenunciasRoute: DenunciasRoute,
+  DenunciasRoute: DenunciasRouteWithChildren,
   FotosIdRoute: FotosIdRoute,
 }
 export const routeTree = rootRouteImport

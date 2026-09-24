@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Google Maps JS API é carregada sem tipos */
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, Outlet, createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DaysOpenBadge } from "@/components/DaysOpenBadge";
 import { Header } from "@/components/Header";
 import { ALMENARA_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-loader";
 import { REPORT_TYPES, reportTypes, type ReportType } from "@/lib/report-types";
-import { formatDaysOpen } from "@/lib/reports";
+import { daysOpen, shortAddress, type PublicReport } from "@/lib/reports";
 import { listPublicReports } from "@/lib/reports.functions";
 
 export const Route = createFileRoute("/denuncias")({
@@ -30,28 +31,43 @@ export const Route = createFileRoute("/denuncias")({
 
 const BRAND_HEX = "#a51212";
 
-/* Address and description come from the public form; never inject them as HTML. */
-function escapeHtml(text: string) {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function waitingSummary(reports: PublicReport[], oldest: PublicReport | undefined) {
+  if (!oldest) return "Nenhuma denúncia registrada ainda.";
+  const days = daysOpen(oldest);
+  const since = days === 1 ? "há 1 dia" : `há ${days} dias`;
+  if (reports.length === 1) {
+    return `1 problema aguardando a prefeitura, denunciado ${days === 0 ? "hoje" : since}.`;
+  }
+  return `${reports.length} problemas aguardando a prefeitura — o mais antigo ${days === 0 ? "foi denunciado hoje" : `espera ${since}`}.`;
 }
 
 function ReportsPage() {
   const reports = Route.useLoaderData();
+  const navigate = useNavigate();
+  const openProtocol = useParams({ strict: false, select: (params) => params.protocol });
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapObj = useRef<any>(null);
   const mapsApi = useRef<any>(null);
   const markers = useRef<Map<string, any>>(new Map());
-  const infoWindow = useRef<any>(null);
-  const cardRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const cardRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
 
   const [ready, setReady] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<ReportType | "todos">("todos");
+
+  const selected = useMemo(() => {
+    const protocol = openProtocol?.toUpperCase();
+    return reports.find((report) => report.protocol === protocol)?.id ?? null;
+  }, [reports, openProtocol]);
+
+  // Latest navigate for marker listeners, which are bound once per marker
+  const openReport = useRef((protocol: string) => {
+    void navigate({
+      to: "/denuncias/$protocol",
+      params: { protocol },
+      state: { fromList: true },
+      resetScroll: false,
+    });
+  });
 
   const ordered = useMemo(
     () =>
@@ -91,7 +107,6 @@ function ReportsPage() {
           mapTypeControl: false,
           streetViewControl: false,
         });
-        infoWindow.current = new maps.InfoWindow();
         setReady(true);
       })
       .catch(() => setReady(false));
@@ -142,7 +157,7 @@ function ReportsPage() {
         label,
         title: `${meta.label} · ${report.protocol}`,
       });
-      marker.addListener("click", () => setSelected(report.id));
+      marker.addListener("click", () => openReport.current(report.protocol));
       markers.current.set(report.id, marker);
     }
   }, [ready, visible, selected]);
@@ -151,26 +166,11 @@ function ReportsPage() {
   useEffect(() => {
     const map = mapObj.current;
     if (!ready || !map || !selected) return;
-    const report = visible.find((item) => item.id === selected);
-    if (!report) {
-      infoWindow.current?.close();
-      return;
-    }
+    const report = reports.find((item) => item.id === selected);
+    if (!report) return;
     map.panTo({ lat: report.lat, lng: report.lng });
     map.setZoom(16);
-    const marker = markers.current.get(report.id);
-    if (marker && infoWindow.current) {
-      const meta = reportTypes[report.type];
-      infoWindow.current.setContent(
-        `<div style="font-family:inherit;font-size:12px;max-width:240px">` +
-          `<strong>${meta.emoji} ${escapeHtml(meta.label)}</strong> · ${escapeHtml(report.protocol)}<br/>` +
-          `${escapeHtml(report.address)}<br/>` +
-          `<span style="color:${BRAND_HEX};font-weight:700">${formatDaysOpen(report)}</span>` +
-          `</div>`,
-      );
-      infoWindow.current.open({ anchor: marker, map });
-    }
-  }, [ready, selected, visible]);
+  }, [ready, selected, reports]);
 
   // Bring the selected card into view when a marker is clicked
   useEffect(() => {
@@ -186,24 +186,7 @@ function ReportsPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Denúncias em Almenara</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {oldest
-                ? `${reports.length} ${reports.length === 1 ? "problema aguardando" : "problemas aguardando"} a prefeitura — a mais antiga foi feita ${formatDaysOpen(oldest).toLowerCase()}.`
-                : "Nenhuma denúncia registrada ainda."}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {REPORT_TYPES.filter((key) => counts[key] > 0).map((key) => (
-              <div
-                key={key}
-                title={reportTypes[key].label}
-                aria-label={`${reportTypes[key].label}: ${counts[key]}`}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-card"
-              >
-                <span aria-hidden="true">{reportTypes[key].emoji}</span>
-                <span aria-hidden="true">{counts[key]}</span>
-              </div>
-            ))}
+            <p className="mt-1 text-sm text-muted-foreground">{waitingSummary(reports, oldest)}</p>
           </div>
         </div>
 
@@ -214,21 +197,33 @@ function ReportsPage() {
 
           <div className="flex flex-col rounded-2xl border border-border bg-card shadow-card lg:h-[calc(100vh-13rem)]">
             <div className="flex flex-wrap gap-2 border-b border-border p-4">
-              {(["todos", ...REPORT_TYPES] as const).map((key) => (
-                <button
-                  key={key}
-                  onClick={() => setFilter(key)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    filter === key
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  {key === "todos"
-                    ? "Todos"
-                    : `${reportTypes[key].emoji} ${reportTypes[key].label}`}
-                </button>
-              ))}
+              {(["todos", ...REPORT_TYPES] as const).map((key) => {
+                const count = key === "todos" ? reports.length : counts[key];
+                const active = filter === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setFilter(key)}
+                    disabled={count === 0 && !active}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-default disabled:opacity-45 ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground enabled:hover:bg-secondary"
+                    }`}
+                  >
+                    {key === "todos"
+                      ? "Todos"
+                      : `${reportTypes[key].emoji} ${reportTypes[key].label}`}
+                    <span
+                      className={`rounded-full px-1.5 text-[11px] ${
+                        active ? "bg-primary-foreground/20" : "bg-card"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -244,52 +239,56 @@ function ReportsPage() {
                 const meta = reportTypes[report.type];
                 const isSelected = selected === report.id;
                 return (
-                  <button
+                  <Link
                     key={report.id}
                     ref={(node) => {
                       if (node) cardRefs.current.set(report.id, node);
                       else cardRefs.current.delete(report.id);
                     }}
-                    onClick={() => setSelected(report.id)}
-                    className={`w-full rounded-xl border p-4 text-left transition-shadow ${
+                    to="/denuncias/$protocol"
+                    params={{ protocol: report.protocol }}
+                    state={{ fromList: true }}
+                    resetScroll={false}
+                    className={`group block overflow-hidden rounded-xl border transition-shadow ${
                       isSelected
-                        ? "border-primary bg-secondary shadow-float"
-                        : "border-border bg-card hover:shadow-card"
+                        ? "border-primary shadow-float"
+                        : "border-border bg-card hover:shadow-float"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span aria-hidden="true" className="text-lg">
-                          {meta.emoji}
-                        </span>
-                        <span className="text-sm font-bold text-foreground">{meta.label}</span>
+                    <div className="relative aspect-[4/3] overflow-hidden bg-neutral-900">
+                      <img
+                        src={report.photoUrl}
+                        alt={`Foto da denúncia: ${meta.label} em ${shortAddress(report.address)}`}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      />
+                      <div className="absolute top-2.5 right-2.5">
+                        <DaysOpenBadge report={report} />
                       </div>
-                      <span className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-extrabold tracking-wide text-primary-foreground uppercase">
-                        {formatDaysOpen(report)}
-                      </span>
                     </div>
-                    <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                      {report.protocol}
-                    </p>
-                    <img
-                      src={report.photoUrl}
-                      alt={`Foto da denúncia ${report.protocol}`}
-                      loading="lazy"
-                      className="mt-3 h-28 w-full rounded-lg border border-border object-cover"
-                    />
-                    <p className="mt-2 text-sm text-foreground">{report.address}</p>
-                    {report.description ? (
-                      <p className="mt-1 text-sm text-muted-foreground italic">
-                        “{report.description}”
+                    <div className="p-3.5">
+                      <p className="flex items-center gap-2 text-sm font-bold text-foreground">
+                        <span aria-hidden="true">{meta.emoji}</span>
+                        {meta.label}
                       </p>
-                    ) : null}
-                  </button>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {shortAddress(report.address)}
+                      </p>
+                      {report.description ? (
+                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground italic">
+                          “{report.description}”
+                        </p>
+                      ) : null}
+                    </div>
+                  </Link>
                 );
               })}
             </div>
           </div>
         </div>
       </main>
+
+      <Outlet />
     </div>
   );
 }
