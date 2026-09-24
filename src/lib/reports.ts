@@ -11,6 +11,9 @@ export type PublicReport = {
   lng: number;
   createdAt: string;
   photoUrl: string;
+  /* "Me afeta também": how many people marked it, and whether this visitor did. */
+  affectedCount: number;
+  affectedByMe: boolean;
 };
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -82,3 +85,8 @@ export function formatProtocol(protocolSeq: number) {
 export function photoUrl(reportId: string) {
   return `/fotos/${reportId}`;
 }
+
+export const AFFECTED_LIMIT_MESSAGE =
+  "Muitas pessoas já marcaram esta denúncia a partir da mesma rede. Tente mais tarde por outra conexão.";
+export const AFFECTED_NOT_FOUND_MESSAGE = "Denúncia não encontrada.";
+export const AFFECTED_ERROR_MESSAGE = "Não foi possível registrar agora. Tente de novo.";

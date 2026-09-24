@@ -90,7 +90,8 @@ if (existing && existing.total > 0) {
 } else {
   const photo = await readFile(new URL("./placeholder.jpg", import.meta.url));
   await db.transaction(async (tx) => {
-    for (const sample of samples) {
+    const affectedBySample = [3, 1, 0, 7, 2, 5, 1];
+    for (const [index, sample] of samples.entries()) {
       const [row] = await tx
         .insert(schema.reports)
         .values(sample)
@@ -99,6 +100,12 @@ if (existing && existing.total > 0) {
       await tx
         .insert(schema.reportPhotos)
         .values({ reportId: row.id, contentType: "image/jpeg", data: photo });
+      const affected = affectedBySample[index] ?? 0;
+      for (let i = 0; i < affected; i++) {
+        await tx
+          .insert(schema.reportAffected)
+          .values({ reportId: row.id, voterId: crypto.randomUUID(), ipHash: `seed-${i}` });
+      }
     }
   });
   console.log(`${samples.length} denúncias de exemplo inseridas.`);
