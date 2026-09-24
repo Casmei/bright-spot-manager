@@ -9,6 +9,7 @@ import { PHOTO_REQUIRED_MESSAGE, reportFormSchema } from "@/lib/report-schema";
 import { createReport } from "@/lib/reports.functions";
 import { shareMessage } from "@/lib/reports";
 import { ShareReport } from "@/components/ShareReport";
+import { InstallAppButton } from "@/components/InstallAppButton";
 import {
   geocodeAddress,
   placeDetails,
@@ -428,17 +429,20 @@ function PublicPage() {
         className="px-4 py-10 text-primary-foreground sm:px-6"
         style={{ background: "var(--gradient-hero)" }}
       >
-        <div className="mx-auto w-full max-w-[1400px]">
-          <p className="text-xs font-semibold tracking-[0.18em] text-accent uppercase">
-            Almenara Vigia · Denúncia comunitária
-          </p>
-          <h1 className="mt-3 max-w-2xl text-3xl leading-tight font-bold sm:text-4xl">
-            Viu um problema na cidade? Denuncie e cobre a prefeitura.
-          </h1>
-          <p className="mt-3 max-w-xl text-sm text-primary-foreground/80">
-            Cada denúncia fica pública no mapa, com a contagem de dias sem solução. Comece pela foto
-            — a gente tenta achar o local sozinho.
-          </p>
+        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.18em] text-accent uppercase">
+              Almenara Vigia · Denúncia comunitária
+            </p>
+            <h1 className="mt-3 max-w-2xl text-3xl leading-tight font-bold sm:text-4xl">
+              Viu um problema na cidade? Denuncie e cobre a prefeitura.
+            </h1>
+            <p className="mt-3 max-w-xl text-sm text-primary-foreground/80">
+              Cada denúncia fica pública no mapa, com a contagem de dias sem solução. Comece pela
+              foto — a gente tenta achar o local sozinho.
+            </p>
+          </div>
+          <InstallAppButton />
         </div>
       </section>
 
