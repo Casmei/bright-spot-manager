@@ -110,6 +110,8 @@ function PublicPage() {
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const sessionToken = useRef<string>("");
   const suggestRequest = useRef(0);
+  /* Bumped whenever the location is chosen another way, so late GPS/geocoding answers are ignored. */
+  const locationRequest = useRef(0);
 
   const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
   const [address, setAddress] = useState("");
@@ -148,9 +150,10 @@ function PublicPage() {
 
   /* Fills the address for a point; falls back to typing when it cannot be resolved. */
   const resolveAddress = useCallback(
-    async (coords: { lat: number; lng: number }) => {
+    async (coords: { lat: number; lng: number }, request: number) => {
       try {
         const result = await findPoint({ data: coords });
+        if (request !== locationRequest.current) return;
         if (result) {
           setAddress(result.address);
           setLocationStatus("found");
@@ -159,6 +162,7 @@ function PublicPage() {
       } catch {
         // handled below
       }
+      if (request !== locationRequest.current) return;
       setAddress("");
       setLocationStatus("manual");
       setError("Não conseguimos identificar o endereço deste ponto. Digite-o abaixo.");
@@ -201,7 +205,7 @@ function PublicPage() {
           setPoint(coords);
           setShowSuggestions(false);
           setError(null);
-          void resolveAddress(coords);
+          void resolveAddress(coords, ++locationRequest.current);
         };
 
         marker.addListener("dragend", () => {
@@ -244,6 +248,7 @@ function PublicPage() {
   }, [address, showSuggestions, findSuggestions]);
 
   async function chooseSuggestion(suggestion: AddressSuggestion) {
+    const request = ++locationRequest.current;
     setShowSuggestions(false);
     setSuggestions([]);
     setAddress(suggestion.label);
@@ -253,6 +258,7 @@ function PublicPage() {
         data: { placeId: suggestion.placeId, sessionToken: ensureSession() },
       });
       sessionToken.current = "";
+      if (request !== locationRequest.current) return;
       if (!result) {
         setError("Não conseguimos localizar esse endereço no mapa.");
         return;
@@ -265,25 +271,30 @@ function PublicPage() {
     }
   }
 
-  async function handleSearch() {
+  async function handleSearch(): Promise<{ lat: number; lng: number } | null> {
     setError(null);
     setShowSuggestions(false);
     if (address.trim().length < 5) {
       setError("Digite um endereço mais completo para buscar.");
-      return;
+      return null;
     }
+    const request = ++locationRequest.current;
     setSearching(true);
     try {
       const result = await findAddress({ data: { address: address.trim() } });
+      if (request !== locationRequest.current) return null;
       if (!result) {
         setError("Endereço não encontrado. Tente incluir número e bairro.");
-        return;
+        return null;
       }
+      const coords = { lat: result.lat, lng: result.lng };
       setAddress(result.address);
-      placeMarker({ lat: result.lat, lng: result.lng });
+      placeMarker(coords);
       setLocationStatus("found");
+      return coords;
     } catch {
       setError("Não conseguimos consultar o endereço agora. Tente novamente.");
+      return null;
     } finally {
       setSearching(false);
     }
@@ -293,6 +304,7 @@ function PublicPage() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    const request = ++locationRequest.current;
     setError(null);
     setPhotoNote("Lendo a foto...");
 
@@ -310,9 +322,10 @@ function PublicPage() {
     // 1. Location saved in the photo itself
     if (gps && typeof gps.latitude === "number" && typeof gps.longitude === "number") {
       const coords = { lat: gps.latitude, lng: gps.longitude };
+      if (request !== locationRequest.current) return;
       setPhotoNote("Foto anexada — usamos a localização registrada na própria foto.");
       placeMarker(coords, 18);
-      await resolveAddress(coords);
+      await resolveAddress(coords, request);
       return;
     }
 
@@ -326,10 +339,12 @@ function PublicPage() {
     setPhotoNote("A foto não tem localização. Pedindo a localização do seu aparelho...");
     setLocationStatus("locating");
     const coords = await browserLocation();
+    // The person picked the location another way (or reset the form) while we waited
+    if (request !== locationRequest.current) return;
     if (coords) {
       setPhotoNote("Foto anexada — usamos a localização do seu aparelho.");
       placeMarker(coords, 18);
-      await resolveAddress(coords);
+      await resolveAddress(coords, request);
       return;
     }
 
@@ -338,11 +353,16 @@ function PublicPage() {
     setLocationStatus("manual");
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    if (!point) {
-      setError("Marque o local do problema no mapa ou informe o endereço.");
+    let target = point;
+    // A typed address that was never searched still counts: look it up now
+    if (!target && address.trim().length >= 5) target = await handleSearch();
+    if (!target) {
+      if (address.trim().length < 5) {
+        setError("Marque o local do problema no mapa ou informe o endereço.");
+      }
       return;
     }
     const parsed = formSchema.safeParse({ type, description, address, name, whatsapp });
@@ -356,14 +376,15 @@ function PublicPage() {
       name: parsed.data.name,
       whatsapp: parsed.data.whatsapp,
       address: parsed.data.address,
-      lat: point.lat,
-      lng: point.lng,
+      lat: target.lat,
+      lng: target.lng,
       ...(photo ? { photo } : {}),
     });
     setProtocol(ticket.protocol);
   }
 
   function resetForm() {
+    locationRequest.current += 1;
     setProtocol(null);
     setPoint(null);
     setAddress("");
@@ -428,7 +449,7 @@ function PublicPage() {
               </button>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={(event) => void handleSubmit(event)} className="space-y-5">
               <div>
                 <h2 className="text-lg font-bold text-foreground">Nova denúncia</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -464,13 +485,18 @@ function PublicPage() {
                 {photoNote ? (
                   <p className="mt-2 text-xs text-muted-foreground">{photoNote}</p>
                 ) : null}
-                {locationStatus === "idle" ? (
+                {locationStatus === "idle" || locationStatus === "locating" ? (
                   <button
                     type="button"
-                    onClick={() => setLocationStatus("manual")}
+                    onClick={() => {
+                      locationRequest.current += 1;
+                      setLocationStatus("manual");
+                    }}
                     className="mt-2 text-xs font-semibold text-primary underline underline-offset-2"
                   >
-                    Sem foto? Informar o endereço
+                    {locationStatus === "locating"
+                      ? "Prefiro informar o endereço"
+                      : "Sem foto? Informar o endereço"}
                   </button>
                 ) : null}
               </div>
