@@ -77,6 +77,15 @@ async function shrinkPhoto(file: File): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.75);
 }
 
+/* Android redacts the location of photos shared with websites by zeroing it, which reads back as NaN or 0,0. */
+function photoCoords(gps: { latitude?: number; longitude?: number } | null) {
+  const lat = gps?.latitude;
+  const lng = gps?.longitude;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat: lat as number, lng: lng as number };
+}
+
 /* Asks the browser for the device location; resolves null when denied or unavailable. */
 function browserLocation(): Promise<{ lat: number; lng: number } | null> {
   return new Promise((resolve) => {
@@ -316,12 +325,12 @@ function PublicPage() {
     }
 
     // 1. Location saved in the photo itself
-    if (gps && typeof gps.latitude === "number" && typeof gps.longitude === "number") {
-      const coords = { lat: gps.latitude, lng: gps.longitude };
+    const photoPoint = photoCoords(gps);
+    if (photoPoint) {
       if (request !== locationRequest.current) return;
       setPhotoNote("Foto anexada — usamos a localização registrada na própria foto.");
-      placeMarker(coords, 18);
-      await resolveAddress(coords, request);
+      placeMarker(photoPoint, 18);
+      await resolveAddress(photoPoint, request);
       return;
     }
 
