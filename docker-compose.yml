@@ -28,6 +28,8 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-vigia}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-vigia}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      AFFECTED_IP_SECRET: ${AFFECTED_IP_SECRET:?defina AFFECTED_IP_SECRET}
+      AFFECTED_MAX_PER_IP: ${AFFECTED_MAX_PER_IP:-3}
     ports:
       - "${APP_PORT:-3000}:3000"
 

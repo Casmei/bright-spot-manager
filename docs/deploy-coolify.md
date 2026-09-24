@@ -30,13 +30,15 @@ para testar localmente; em produção o banco é um recurso separado no Coolify 
 subida, o `app` aplica as migrations pendentes e depois inicia o servidor. As variáveis também
 podem ficar num arquivo `.env` ao lado do `docker-compose.yml`.
 
-| Variável | Quando | Para quê |
-|---|---|---|
-| `POSTGRES_PASSWORD` | runtime (obrigatória) | senha do banco. Use só letras e números, porque ela entra na URL de conexão |
-| `POSTGRES_USER`, `POSTGRES_DB` | runtime (opcionais) | padrão `vigia` |
-| `VITE_GOOGLE_MAPS_API_KEY` | **build** | chave do Maps no navegador; é embutida no JavaScript no build |
-| `GOOGLE_MAPS_API_KEY` | runtime | chave do servidor (geocoding), sem restrição de referer |
-| `APP_PORT` | opcional | porta do host para o app (padrão 3000) |
+| Variável                       | Quando                | Para quê                                                                                                      |
+| ------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD`            | runtime (obrigatória) | senha do banco. Use só letras e números, porque ela entra na URL de conexão                                   |
+| `POSTGRES_USER`, `POSTGRES_DB` | runtime (opcionais)   | padrão `vigia`                                                                                                |
+| `VITE_GOOGLE_MAPS_API_KEY`     | **build**             | chave do Maps no navegador; é embutida no JavaScript no build                                                 |
+| `GOOGLE_MAPS_API_KEY`          | runtime               | chave do servidor (geocoding), sem restrição de referer                                                       |
+| `AFFECTED_IP_SECRET`           | runtime (obrigatória) | segredo do hash do IP no "Me afeta também". Gere com `openssl rand -hex 32`; trocar só zera o limite por rede |
+| `AFFECTED_MAX_PER_IP`          | runtime (opcional)    | quantas pessoas da mesma rede podem marcar a mesma denúncia (padrão 3)                                        |
+| `APP_PORT`                     | opcional              | porta do host para o app (padrão 3000)                                                                        |
 
 > Máquina atrás de proxy que inspeciona HTTPS: se o `bun install` do build falhar com
 > `SELF_SIGNED_CERT_IN_CHAIN`, crie um `docker-compose.override.yml` (já está no `.gitignore`)
@@ -62,7 +64,7 @@ tem ciclo de vida e backup próprios, e um redeploy do app nunca mexe nele. O
 
 1. **New Resource → Database → PostgreSQL**, versão 17, no mesmo projeto e ambiente em que o
    app vai ficar.
-2. Deixe o banco **sem acesso público** (*Make it publicly available* desligado).
+2. Deixe o banco **sem acesso público** (_Make it publicly available_ desligado).
 3. Inicie o banco e copie a **Postgres URL (internal)**. Ela é o `DATABASE_URL` do app.
 
 ### 2. App
@@ -71,10 +73,12 @@ tem ciclo de vida e backup próprios, e um redeploy do app nunca mexe nele. O
 2. **Build Pack: Dockerfile** (usa o `Dockerfile` da raiz). **Ports Exposes: `3000`**.
 3. Em **Environment Variables**:
 
-   | Variável | Tipo | Valor |
-   |---|---|---|
-   | `DATABASE_URL` | runtime | a Postgres URL (internal) do passo anterior |
-   | `GOOGLE_MAPS_API_KEY` | runtime | chave do servidor (geocoding) |
+   | Variável                   | Tipo               | Valor                                                 |
+   | -------------------------- | ------------------ | ----------------------------------------------------- |
+   | `DATABASE_URL`             | runtime            | a Postgres URL (internal) do passo anterior           |
+   | `GOOGLE_MAPS_API_KEY`      | runtime            | chave do servidor (geocoding)                         |
+   | `AFFECTED_IP_SECRET`       | runtime            | `openssl rand -hex 32`                                |
+   | `AFFECTED_MAX_PER_IP`      | runtime (opcional) | padrão `3`                                            |
    | `VITE_GOOGLE_MAPS_API_KEY` | **Build Variable** | chave do navegador; é embutida no JavaScript no build |
 
 4. Defina o domínio (ex.: `https://vigia.seudominio.com.br`). O Coolify emite o HTTPS.
