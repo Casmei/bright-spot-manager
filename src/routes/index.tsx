@@ -48,9 +48,25 @@ const locationHints: Record<LocationStatus, string> = {
   manual: "Digite o endereço ou toque no mapa para marcar o local.",
 };
 
+/* Decodes a photo, converting HEIC/HEIF (iPhone, Samsung) to JPEG when the browser can't read it. */
+async function decodePhoto(file: File): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(file);
+  } catch (err) {
+    // Only Safari decodes HEIC natively; everywhere else convert it first
+    const { default: heic2any } = await import("heic2any");
+    const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 }).catch(
+      () => {
+        throw err;
+      },
+    );
+    return createImageBitmap(Array.isArray(converted) ? converted[0]! : converted);
+  }
+}
+
 /* Shrinks a camera photo so it can be kept alongside the report. */
 async function shrinkPhoto(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await decodePhoto(file);
   const max = 1000;
   const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
@@ -475,7 +491,7 @@ function PublicPage() {
                 <input
                   ref={photoInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.heic,.heif"
                   onChange={(event) => void handlePhoto(event)}
                   className="hidden"
                 />
