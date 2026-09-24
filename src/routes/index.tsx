@@ -7,6 +7,8 @@ import { ALMENARA_CENTER, MAP_STYLES, loadGoogleMaps } from "@/lib/google-maps-l
 import { REPORT_TYPES, reportTypes, type ReportType } from "@/lib/report-types";
 import { PHOTO_REQUIRED_MESSAGE, reportFormSchema } from "@/lib/report-schema";
 import { createReport } from "@/lib/reports.functions";
+import { shareMessage } from "@/lib/reports";
+import { ShareReport } from "@/components/ShareReport";
 import {
   geocodeAddress,
   placeDetails,
@@ -102,6 +104,7 @@ function PublicPage() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [protocol, setProtocol] = useState<string | null>(null);
+  const [sentMessage, setSentMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const findAddress = useServerFn(geocodeAddress);
@@ -357,6 +360,13 @@ function PublicPage() {
       const result = await sendReport({
         data: { ...parsed.data, lat: target.lat, lng: target.lng, photo },
       });
+      setSentMessage(
+        shareMessage({
+          type: parsed.data.type,
+          address: parsed.data.address,
+          createdAt: new Date().toISOString(),
+        }),
+      );
       setProtocol(result.protocol);
     } catch (err) {
       // Keeps everything the person typed so they can just try again
@@ -408,7 +418,9 @@ function PublicPage() {
       </section>
 
       <main className="mx-auto grid w-full max-w-[1400px] gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,420px)_1fr]">
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+        <div
+          className={`rounded-2xl border border-border bg-card p-6 shadow-card ${protocol ? "self-start" : ""}`}
+        >
           {protocol ? (
             <div className="text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-2xl">
@@ -419,18 +431,35 @@ function PublicPage() {
                 Seu protocolo é <span className="font-semibold text-primary">{protocol}</span>. Ela
                 já aparece no mapa público, contando os dias até a prefeitura resolver.
               </p>
-              <Link
-                to="/denuncias"
-                className="mt-6 block w-full rounded-xl bg-primary px-4 py-3 text-center text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-              >
-                Ver no mapa de denúncias
-              </Link>
-              <button
-                onClick={resetForm}
-                className="mt-3 w-full rounded-xl border border-primary/25 bg-secondary px-4 py-3 text-sm font-semibold text-primary"
-              >
-                Fazer outra denúncia
-              </button>
+              <div className="mt-6 rounded-xl bg-secondary p-4 text-left">
+                <p className="text-sm font-semibold text-foreground">
+                  Agora espalhe: quanto mais gente vê, mais difícil ignorar.
+                </p>
+                <p className="mt-1 mb-3 text-xs text-muted-foreground">
+                  O link abre direto na sua denúncia, com a foto.
+                </p>
+                <ShareReport
+                  url={`${window.location.origin}/denuncias/${protocol}`}
+                  message={sentMessage}
+                />
+              </div>
+              <div className="mt-4 flex items-center justify-center gap-5 text-sm font-semibold">
+                <Link
+                  to="/denuncias/$protocol"
+                  params={{ protocol }}
+                  className="text-primary hover:underline"
+                >
+                  Ver minha denúncia
+                </Link>
+                <span aria-hidden="true" className="h-4 w-px bg-border" />
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Fazer outra denúncia
+                </button>
+              </div>
             </div>
           ) : (
             <form onSubmit={(event) => void handleSubmit(event)} className="space-y-5">

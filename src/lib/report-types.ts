@@ -4,7 +4,7 @@ export const REPORT_TYPES = ["buraco", "entulho", "lampada", "esgoto", "mato", "
 export type ReportType = (typeof REPORT_TYPES)[number];
 
 export const reportTypes: Record<ReportType, { emoji: string; label: string }> = {
-  buraco: { emoji: "🕳️", label: "Buraco na via" },
+  buraco: { emoji: "🚧", label: "Buraco na via" },
   entulho: { emoji: "🗑️", label: "Entulho / lixo" },
   lampada: { emoji: "💡", label: "Lâmpada queimada" },
   esgoto: { emoji: "💧", label: "Esgoto / vazamento" },
