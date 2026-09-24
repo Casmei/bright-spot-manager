@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Google Maps JS API é carregada sem tipos */
 /* Loads the Google Maps JavaScript API once, asynchronously. */
 
 type AnyMaps = any;

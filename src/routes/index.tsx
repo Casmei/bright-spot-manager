@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Google Maps JS API é carregada sem tipos */
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -26,7 +27,8 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Almenara Vigia — Denuncie e cobre a prefeitura" },
       {
         property: "og:description",
-        content: "Tire uma foto do problema, marque no mapa e pressione a prefeitura por uma solução.",
+        content:
+          "Tire uma foto do problema, marque no mapa e pressione a prefeitura por uma solução.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -394,8 +396,8 @@ function PublicPage() {
             Viu um problema na cidade? Denuncie e cobre a prefeitura.
           </h1>
           <p className="mt-3 max-w-xl text-sm text-primary-foreground/80">
-            Cada denúncia fica pública no mapa, com a contagem de dias sem solução. Comece pela
-            foto — a gente tenta achar o local sozinho.
+            Cada denúncia fica pública no mapa, com a contagem de dias sem solução. Comece pela foto
+            — a gente tenta achar o local sozinho.
           </p>
         </div>
       </section>
@@ -409,8 +411,8 @@ function PublicPage() {
               </div>
               <h2 className="mt-4 text-xl font-bold text-foreground">Denúncia registrada!</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Seu protocolo é <span className="font-semibold text-primary">{protocol}</span>.
-                Ela já aparece no mapa público, contando os dias até a prefeitura resolver.
+                Seu protocolo é <span className="font-semibold text-primary">{protocol}</span>. Ela
+                já aparece no mapa público, contando os dias até a prefeitura resolver.
               </p>
               <Link
                 to="/denuncias"

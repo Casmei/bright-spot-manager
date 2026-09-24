@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Google Maps JS API é carregada sem tipos */
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/Header";
@@ -221,7 +222,9 @@ function ReportsPage() {
                       : "bg-muted text-muted-foreground hover:bg-secondary"
                   }`}
                 >
-                  {key === "todos" ? "Todos" : `${reportTypes[key].emoji} ${reportTypes[key].label}`}
+                  {key === "todos"
+                    ? "Todos"
+                    : `${reportTypes[key].emoji} ${reportTypes[key].label}`}
                 </button>
               ))}
             </div>
