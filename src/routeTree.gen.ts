@@ -9,87 +9,118 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as DenunciasRouteImport } from './routes/denuncias'
-import { Route as DenunciasProtocolRouteImport } from './routes/denuncias.$protocol'
+import { Route as ListaRouteImport } from './routes/_lista'
+import { Route as DenunciarRouteImport } from './routes/denunciar'
+import { Route as ListaIndexRouteImport } from './routes/_lista.index'
+import { Route as DenunciasIndexRouteImport } from './routes/denuncias.index'
 import { Route as FotosIdRouteImport } from './routes/fotos.$id'
+import { Route as ListaDenunciasProtocolRouteImport } from './routes/_lista.denuncias.$protocol'
 
-const IndexRoute = IndexRouteImport.update({
+const ListaRoute = ListaRouteImport.update({
+  id: '/_lista',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DenunciarRoute = DenunciarRouteImport.update({
+  id: '/denunciar',
+  path: '/denunciar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ListaIndexRoute = ListaIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => ListaRoute,
 } as any)
-const DenunciasRoute = DenunciasRouteImport.update({
-  id: '/denuncias',
-  path: '/denuncias',
+const DenunciasIndexRoute = DenunciasIndexRouteImport.update({
+  id: '/denuncias/',
+  path: '/denuncias/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const DenunciasProtocolRoute = DenunciasProtocolRouteImport.update({
-  id: '/$protocol',
-  path: '/$protocol',
-  getParentRoute: () => DenunciasRoute,
 } as any)
 const FotosIdRoute = FotosIdRouteImport.update({
   id: '/fotos/$id',
   path: '/fotos/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ListaDenunciasProtocolRoute = ListaDenunciasProtocolRouteImport.update({
+  id: '/denuncias/$protocol',
+  path: '/denuncias/$protocol',
+  getParentRoute: () => ListaRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/denuncias': typeof DenunciasRouteWithChildren
-  '/denuncias/$protocol': typeof DenunciasProtocolRoute
+  '/': typeof ListaIndexRoute
+  '/denunciar': typeof DenunciarRoute
   '/fotos/$id': typeof FotosIdRoute
+  '/denuncias/': typeof DenunciasIndexRoute
+  '/denuncias/$protocol': typeof ListaDenunciasProtocolRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/denuncias': typeof DenunciasRouteWithChildren
-  '/denuncias/$protocol': typeof DenunciasProtocolRoute
+  '/denunciar': typeof DenunciarRoute
   '/fotos/$id': typeof FotosIdRoute
+  '/': typeof ListaIndexRoute
+  '/denuncias': typeof DenunciasIndexRoute
+  '/denuncias/$protocol': typeof ListaDenunciasProtocolRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/denuncias': typeof DenunciasRouteWithChildren
-  '/denuncias/$protocol': typeof DenunciasProtocolRoute
+  '/_lista': typeof ListaRouteWithChildren
+  '/denunciar': typeof DenunciarRoute
   '/fotos/$id': typeof FotosIdRoute
+  '/_lista/': typeof ListaIndexRoute
+  '/denuncias/': typeof DenunciasIndexRoute
+  '/_lista/denuncias/$protocol': typeof ListaDenunciasProtocolRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/denuncias' | '/denuncias/$protocol' | '/fotos/$id'
+  fullPaths:
+    '/' | '/denunciar' | '/fotos/$id' | '/denuncias/' | '/denuncias/$protocol'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/denuncias' | '/denuncias/$protocol' | '/fotos/$id'
-  id: '__root__' | '/' | '/denuncias' | '/denuncias/$protocol' | '/fotos/$id'
+  to: '/denunciar' | '/fotos/$id' | '/' | '/denuncias' | '/denuncias/$protocol'
+  id:
+    | '__root__'
+    | '/_lista'
+    | '/denunciar'
+    | '/fotos/$id'
+    | '/_lista/'
+    | '/denuncias/'
+    | '/_lista/denuncias/$protocol'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  DenunciasRoute: typeof DenunciasRouteWithChildren
+  ListaRoute: typeof ListaRouteWithChildren
+  DenunciarRoute: typeof DenunciarRoute
   FotosIdRoute: typeof FotosIdRoute
+  DenunciasIndexRoute: typeof DenunciasIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
+    '/_lista': {
+      id: '/_lista'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof ListaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/denunciar': {
+      id: '/denunciar'
+      path: '/denunciar'
+      fullPath: '/denunciar'
+      preLoaderRoute: typeof DenunciarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_lista/': {
+      id: '/_lista/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof ListaIndexRouteImport
+      parentRoute: typeof ListaRoute
     }
-    '/denuncias': {
-      id: '/denuncias'
+    '/denuncias/': {
+      id: '/denuncias/'
       path: '/denuncias'
-      fullPath: '/denuncias'
-      preLoaderRoute: typeof DenunciasRouteImport
+      fullPath: '/denuncias/'
+      preLoaderRoute: typeof DenunciasIndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/denuncias/$protocol': {
-      id: '/denuncias/$protocol'
-      path: '/$protocol'
-      fullPath: '/denuncias/$protocol'
-      preLoaderRoute: typeof DenunciasProtocolRouteImport
-      parentRoute: typeof DenunciasRoute
     }
     '/fotos/$id': {
       id: '/fotos/$id'
@@ -98,25 +129,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FotosIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_lista/denuncias/$protocol': {
+      id: '/_lista/denuncias/$protocol'
+      path: '/denuncias/$protocol'
+      fullPath: '/denuncias/$protocol'
+      preLoaderRoute: typeof ListaDenunciasProtocolRouteImport
+      parentRoute: typeof ListaRoute
+    }
   }
 }
 
-interface DenunciasRouteChildren {
-  DenunciasProtocolRoute: typeof DenunciasProtocolRoute
+interface ListaRouteChildren {
+  ListaIndexRoute: typeof ListaIndexRoute
+  ListaDenunciasProtocolRoute: typeof ListaDenunciasProtocolRoute
 }
 
-const DenunciasRouteChildren: DenunciasRouteChildren = {
-  DenunciasProtocolRoute: DenunciasProtocolRoute,
+const ListaRouteChildren: ListaRouteChildren = {
+  ListaIndexRoute: ListaIndexRoute,
+  ListaDenunciasProtocolRoute: ListaDenunciasProtocolRoute,
 }
 
-const DenunciasRouteWithChildren = DenunciasRoute._addFileChildren(
-  DenunciasRouteChildren,
-)
+const ListaRouteWithChildren = ListaRoute._addFileChildren(ListaRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  DenunciasRoute: DenunciasRouteWithChildren,
+  ListaRoute: ListaRouteWithChildren,
+  DenunciarRoute: DenunciarRoute,
   FotosIdRoute: FotosIdRoute,
+  DenunciasIndexRoute: DenunciasIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

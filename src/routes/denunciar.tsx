@@ -18,23 +18,12 @@ import {
   type AddressSuggestion,
 } from "@/lib/geocoding.functions";
 
-export const Route = createFileRoute("/")({
+/* Unlisted while in beta: reached through the logo shortcut, never linked. */
+export const Route = createFileRoute("/denunciar")({
   head: () => ({
     meta: [
       { title: "Fazer denúncia — Almenara Vigia" },
-      {
-        name: "description",
-        content:
-          "Denuncie buracos, entulho, lâmpadas queimadas e outros problemas de Almenara. A denúncia fica pública no mapa, com a contagem de dias sem solução.",
-      },
-      { property: "og:title", content: "Almenara Vigia — Denuncie e cobre a prefeitura" },
-      {
-        property: "og:description",
-        content:
-          "Tire uma foto do problema, marque no mapa e pressione a prefeitura por uma solução.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
   }),
   component: PublicPage,
@@ -386,6 +375,10 @@ function PublicPage() {
       const result = await sendReport({
         data: { ...parsed.data, lat: target.lat, lng: target.lng, photo },
       });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
       setSentMessage(
         shareMessage({
           type: parsed.data.type,

@@ -10,7 +10,8 @@ import { daysOpen, shortAddress, type PublicReport } from "@/lib/reports";
 import { listPublicReports } from "@/lib/reports.functions";
 import { AffectedProvider } from "@/lib/use-affected";
 
-export const Route = createFileRoute("/denuncias")({
+/* The home page: the map and list stay mounted while a report opens on top (/denuncias/$protocol). */
+export const Route = createFileRoute("/_lista")({
   head: () => ({
     meta: [
       { title: "Denúncias em Almenara — Almenara Vigia" },
@@ -183,7 +184,7 @@ function ReportsPage() {
   return (
     <AffectedProvider>
       <div className="min-h-screen bg-background font-sans">
-        <Header variant="denuncias" />
+        <Header />
 
         <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6">
           <div className="flex flex-wrap items-end justify-between gap-4">

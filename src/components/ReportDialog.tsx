@@ -189,7 +189,7 @@ export function ReportNotFoundDialog({ onClose }: { onClose: () => void }) {
           Confira se o link está completo. As demais denúncias continuam no mapa.
         </DialogPrimitive.Description>
         <Link
-          to="/denuncias"
+          to="/"
           className="mt-5 inline-block rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
         >
           Ver todas as denúncias

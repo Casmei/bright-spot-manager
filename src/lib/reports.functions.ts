@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getDb } from "@/db/client";
 import { reportPhotos, reports } from "@/db/schema";
 import { insertAuthorMark } from "@/lib/affected";
+import { NOT_BETA_MESSAGE, betaWhatsapps, isBetaWhatsapp } from "@/lib/beta";
 import { selectPublicReports } from "@/lib/public-reports";
 import { PHOTO_REQUIRED_MESSAGE, reportInputSchema } from "@/lib/report-schema";
 import { formatProtocol, type PublicReport } from "@/lib/reports";
@@ -31,6 +32,8 @@ function authorMark() {
   }
 }
 
+export type CreateReportResult = { ok: true; protocol: string } | { ok: false; message: string };
+
 export const createReport = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     const parsed = reportInputSchema.safeParse(data);
@@ -39,7 +42,9 @@ export const createReport = createServerFn({ method: "POST" })
     }
     return parsed.data;
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<CreateReportResult> => {
+    if (!isBetaWhatsapp(data.whatsapp, betaWhatsapps(process.env)))
+      return { ok: false, message: NOT_BETA_MESSAGE };
     const photo = decodeJpegDataUrl(data.photo);
     const author = authorMark();
     const created = await getDb().transaction(async (tx) => {
@@ -62,7 +67,7 @@ export const createReport = createServerFn({ method: "POST" })
       if (author) await insertAuthorMark(tx, { reportId: row.id, ...author });
       return row;
     });
-    return { protocol: formatProtocol(created.protocolSeq) };
+    return { ok: true, protocol: formatProtocol(created.protocolSeq) };
   });
 
 export const listPublicReports = createServerFn({ method: "GET" }).handler(

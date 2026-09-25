@@ -12,7 +12,7 @@ declare module "@tanstack/react-router" {
 }
 
 /* The shareable page of one report: the list stays behind, the report opens on top. */
-export const Route = createFileRoute("/denuncias/$protocol")({
+export const Route = createFileRoute("/_lista/denuncias/$protocol")({
   loader: async ({ params, parentMatchPromise }) => {
     const reports = (await parentMatchPromise).loaderData ?? [];
     const protocol = params.protocol.toUpperCase();
@@ -56,7 +56,7 @@ function ReportPage() {
 
   function close() {
     if (fromList) router.history.back();
-    else void navigate({ to: "/denuncias", resetScroll: false });
+    else void navigate({ to: "/", resetScroll: false });
   }
 
   if (!report) return <ReportNotFoundDialog onClose={close} />;
