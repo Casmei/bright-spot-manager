@@ -1,48 +1,16 @@
-// Service worker do Almenara Vigia: torna o site instalável e mostra uma página
-// de "sem conexão" quando a navegação falha. Os dados das denúncias sempre vêm da
-// rede; só guardamos arquivos estáticos (JS/CSS com hash, ícones e a página offline).
-const CACHE = "almenara-vigia-v1";
-const PRECACHE = ["/offline.html", "/icons/icon-192.png"];
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
-  self.skipWaiting();
-});
+// O site deixou de ser PWA. Este service worker só existe para desfazer o antigo nos
+// aparelhos que já o instalaram: apaga os caches, se desregistra e recarrega as abas.
+// Pode ser apagado quando ninguém mais tiver o antigo (algumas semanas depois).
+self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim()),
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: "window" });
+      clients.forEach((client) => client.navigate(client.url));
+    })(),
   );
-});
-
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  if (request.method !== "GET") return;
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
-    return;
-  }
-
-  // Arquivos do build têm hash no nome e nunca mudam: cache-first.
-  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/icons/")) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((response) => {
-            if (response.ok) {
-              const copy = response.clone();
-              event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)));
-            }
-            return response;
-          }),
-      ),
-    );
-  }
 });
